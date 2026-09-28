@@ -1,0 +1,18 @@
+# Generated reports, data, and work files
+/outputs/
+/tmp/
+/work/
+/artifact_runtime/
+/.codex_spreadsheet_review/
+/.codex-remote-attachments/
+/node_modules/
+
+# Local sensor captures and downloads
+*.log
+*.csv
+
+# Editor and system files
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
