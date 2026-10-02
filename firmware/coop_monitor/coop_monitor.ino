@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include <SPI.h>
-#include <SD.h>
+#include "cloud_runtime.h"
 #include <Preferences.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -12,15 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ESP32-C3 SuperMini: MQ-135, AHT20/BMP280, SSD1306 OLED, and SPI MicroSD.
+// ESP32-C3 SuperMini: MQ-135, AHT20/BMP280, OLED, and Wi-Fi cloud logging.
 // MQ-135 AO must pass through the 10 kOhm / 10 kOhm divider before GPIO3.
 constexpr int MQ_ANALOG_PIN = 3;
 constexpr int I2C_SDA_PIN = 4;
 constexpr int I2C_SCL_PIN = 5;
-constexpr int SD_CS_PIN = 10;
-constexpr int SD_SCK_PIN = 6;
-constexpr int SD_MOSI_PIN = 7;
-constexpr int SD_MISO_PIN = 1;
 constexpr uint8_t AHT20_ADDRESS = 0x38;
 constexpr uint8_t BMP280_ADDRESS_1 = 0x76;
 constexpr uint8_t BMP280_ADDRESS_2 = 0x77;
@@ -35,10 +30,6 @@ constexpr char SENSOR_ID[] = "mq135-01";  // Keep this with the same physical MQ
 
 constexpr uint32_t SAMPLE_INTERVAL_MS = 2000;
 constexpr uint32_t LOG_INTERVAL_MS = 30000;
-constexpr uint32_t SD_RETRY_MS = 10000;
-constexpr uint32_t SD_SPI_HZ = 4000000;
-constexpr size_t SD_TRANSFER_CHUNK_BYTES = 128;
-constexpr uint8_t SD_LIST_MAX_DEPTH = 8;
 constexpr char LOG_HEADER[] =
     "Record reason,Sample number,Uptime (s),MQ raw ADC,MQ ADC (mV),"
     "MQ output (V),MQ baseline ratio,AHT temperature (C),Humidity (%RH),"
@@ -67,18 +58,9 @@ uint32_t startedMs = 0;
 uint32_t lastSampleMs = 0;
 uint32_t sampleNumber = 0;
 uint8_t warningStreak = 0;
-bool sdReady = false;
 bool hasLogged = false;
 uint32_t lastLogMs = 0;
-uint32_t lastSdAttemptMs = 0;
-char logPath[20] = "";
 char lastLoggedStatus[160] = "";
-File transferFile;
-bool transferActive = false;
-uint32_t transferSize = 0;
-uint32_t transferBytes = 0;
-uint32_t transferSequence = 0;
-uint32_t transferCrc = 0xFFFFFFFFUL;
 
 struct Calibration {
   bool valid = false;
@@ -139,7 +121,7 @@ struct Reading {
   bool bmpValid;
 };
 
-char commandBuffer[192];
+char commandBuffer[320];
 size_t commandLength = 0;
 bool commandOverflow = false;
 
@@ -269,67 +251,6 @@ bool beginOled() {
   return display.begin(SSD1306_SWITCHCAPVCC, oledAddress, true, false);
 }
 
-bool beginSdLog() {
-  lastSdAttemptMs = millis();
-  SD.end();
-  if (!SD.begin(SD_CS_PIN, SPI, SD_SPI_HZ) || SD.cardType() == CARD_NONE) {
-    sdReady = false;
-    SD.end();
-    Serial.println("MicroSD unavailable; retrying every 10 seconds.");
-    return false;
-  }
-
-  // A new file for each boot keeps uptime-only records from different boots apart.
-  if (!logPath[0]) {
-    for (unsigned int number = 1; number <= 9999; ++number) {
-      char candidate[sizeof(logPath)];
-      snprintf(candidate, sizeof(candidate), "/COOP%04u.CSV", number);
-      if (!SD.exists(candidate)) {
-        strcpy(logPath, candidate);
-        break;
-      }
-    }
-  }
-  if (!logPath[0]) {
-    sdReady = false;
-    SD.end();
-    Serial.println("MicroSD has no free COOP0001.CSV through COOP9999.CSV filename.");
-    return false;
-  }
-
-  File file = SD.open(logPath, FILE_APPEND);
-  if (!file) {
-    sdReady = false;
-    SD.end();
-    Serial.println("MicroSD log file could not be opened; retrying.");
-    return false;
-  }
-  if (file.size() == 0) {
-    const size_t written = file.println(LOG_HEADER);
-    file.close();
-    if (written < strlen(LOG_HEADER) + 1) {
-      sdReady = false;
-      SD.remove(logPath);
-      SD.end();
-      logPath[0] = '\0';
-      Serial.println("MicroSD CSV header write failed; retrying.");
-      return false;
-    }
-  } else {
-    file.close();
-  }
-  sdReady = true;
-  Serial.printf("MicroSD logging to %s (30 seconds and status changes).\n", logPath);
-  return true;
-}
-
-void failSdLog() {
-  sdReady = false;
-  lastSdAttemptMs = millis();
-  SD.end();
-  Serial.println("MicroSD write failed; logging paused until card is available.");
-}
-
 Reading readSensors() {
   constexpr uint8_t MQ_READS = 32;
   uint32_t rawTotal = 0;
@@ -418,7 +339,15 @@ void showOnOled(const Reading &reading, const char *status) {
   display.setCursor(0, 56);
   if (strstr(status, "GAS_WARNING")) display.print("GAS WARNING");
   else if (strstr(status, "MQ_ADC_HIGH")) display.print("MQ ADC HIGH");
-  else if (!sdReady) display.print("SD ERROR");
+  else if (!cloud::snapshot().queueReady) display.print("FLASH QUEUE ERROR");
+  else if ((sampleNumber & 1) == 0) {
+    const cloud::State net = cloud::snapshot();
+    display.print(net.wifi ? "NET " : "OFFLINE ");
+    display.print(net.pending);
+    if (net.dropped) display.print(" DROP");
+    else if (strcmp(net.message, "CLOUD READY") && strcmp(net.message, "UPLOADING"))
+      display.print(" ERR");
+  }
   else if (strstr(status, "CAL_STABILIZING")) display.print("CAL STABILIZING");
   else if (strstr(status, "CAL_COLLECTING")) display.print("CAL COLLECTING");
   else if (strstr(status, "AHT_ERROR")) display.print("AHT ERROR");
@@ -579,31 +508,39 @@ bool formatLogRow(char *output, size_t capacity, const Reading &reading,
 
 void logReading(const Reading &reading, const char *status, uint32_t now,
                 uint32_t uptime) {
-  // Keep SD writes out of an active read transfer. Sampling and Serial continue.
-  if (!sdReady || transferActive) return;
-  const bool statusChanged = hasLogged && strcmp(status, lastLoggedStatus) != 0;
-  if (hasLogged && !statusChanged && now - lastLogMs < LOG_INTERVAL_MS) return;
-
-  char row[384];
-  if (!formatLogRow(row, sizeof(row), reading, status, uptime, statusChanged)) {
-    Serial.println("MicroSD CSV row exceeded the buffer; reading not saved.");
-    return;
+  (void)uptime;
+  const bool changed = hasLogged && strcmp(status, lastLoggedStatus) != 0;
+  if (hasLogged && !changed && now - lastLogMs < LOG_INTERVAL_MS) return;
+  coop::Record record{};
+  memcpy(record.boot, cloud::bootId, sizeof(record.boot));
+  record.sample = sampleNumber;
+  record.uptimeMs = (esp_timer_get_time() - cloud::monitoringStartedUs) / 1000;
+  timeval clock{}; gettimeofday(&clock, nullptr);
+  if (clock.tv_sec >= 1704067200)
+    record.sampledUtcMs = static_cast<int64_t>(clock.tv_sec) * 1000 + clock.tv_usec / 1000;
+  record.mqRaw = reading.mqRaw;
+  record.mqAdcMv = reading.mqAdcMv;
+  record.mqModuleV = reading.mqModuleV;
+  record.mqRatio = calibration.valid ? reading.mqAdcMv / calibration.baselineMv : NAN;
+  record.ahtTemperatureC = reading.ahtValid ? reading.ahtTemperatureC : NAN;
+  record.humidityPercent = reading.ahtValid ? reading.humidityPercent : NAN;
+  record.bmpTemperatureC = reading.bmpValid ? reading.bmpTemperatureC : NAN;
+  record.pressureHpa = reading.bmpValid ? reading.pressureHpa : NAN;
+  record.reason = changed ? 1 : 0;
+  const char *flags[] = {"WARMUP", "CAL_MISSING", "CAL_STABILIZING", "CAL_COLLECTING",
+    "AHT_ERROR", "BMP_ERROR", "OLED_ERROR", "MQ_ADC_HIGH", "GAS_WARNING"};
+  for (unsigned bit = 0; bit < 9; ++bit) if (strstr(status, flags[bit]))
+    record.status |= 1 << bit;
+  bool saved = false;
+  if (cloud::mutex) {
+    cloud::Guard lock;
+    saved = cloud::queue.push(record);
+    cloud::refreshQueueState();
   }
-  File file = SD.open(logPath, FILE_APPEND);
-  if (!file) {
-    failSdLog();
-    return;
-  }
-  const size_t written = file.println(row);
-  file.close();  // Commit each row so a later power loss loses as little as possible.
-  if (written < strlen(row) + 1) {
-    failSdLog();
-    return;
-  }
+  if (!saved) { Serial.println("@QUEUE,ERROR,READING_NOT_SAVED"); return; }
   hasLogged = true;
   lastLogMs = now;
-  strncpy(lastLoggedStatus, status, sizeof(lastLoggedStatus) - 1);
-  lastLoggedStatus[sizeof(lastLoggedStatus) - 1] = '\0';
+  snprintf(lastLoggedStatus, sizeof(lastLoggedStatus), "%s", status);
 }
 
 void takeReading() {
@@ -712,120 +649,6 @@ void importCalibration(char *fieldsText) {
   Serial.println("@CAL,IMPORTED");
 }
 
-void printSdHex(const uint8_t *bytes, size_t length) {
-  static constexpr char HEX_DIGITS[] = "0123456789ABCDEF";
-  for (size_t index = 0; index < length; ++index) {
-    Serial.write(HEX_DIGITS[bytes[index] >> 4]);
-    Serial.write(HEX_DIGITS[bytes[index] & 0x0F]);
-  }
-}
-
-bool listSdDirectory(File &directory, uint8_t depth, uint32_t &count,
-                     bool protocol) {
-  File entry = directory.openNextFile();
-  while (entry) {
-    if (entry.isDirectory()) {
-      if (depth >= SD_LIST_MAX_DEPTH ||
-          !listSdDirectory(entry, depth + 1, count, protocol)) {
-        entry.close();
-        return false;
-      }
-    } else {
-      const char *path = entry.path();
-      if (!path) { entry.close(); return false; }
-      if (protocol) {
-        Serial.print("@SD,FILE,");
-        printSdHex(reinterpret_cast<const uint8_t *>(path), strlen(path));
-        Serial.printf(",%lu\n", (unsigned long)entry.size());
-      } else {
-        Serial.printf("  %s (%lu bytes)\n", path, (unsigned long)entry.size());
-      }
-      ++count;
-    }
-    entry.close();
-    entry = directory.openNextFile();
-  }
-  return true;
-}
-
-void listSdFiles(bool protocol) {
-  if (!sdReady) { Serial.println("@SD,ERROR,SD_NOT_READY"); return; }
-  if (transferActive) { Serial.println("@SD,ERROR,BUSY"); return; }
-  File root = SD.open("/");
-  if (!root || !root.isDirectory()) {
-    Serial.println("@SD,ERROR,LIST_OPEN_FAILED");
-    return;
-  }
-  if (protocol) Serial.println("@SD,LIST,BEGIN,1");
-  else Serial.println("MicroSD files:");
-  uint32_t count = 0;
-  const bool complete = listSdDirectory(root, 0, count, protocol);
-  root.close();
-  if (complete && protocol) Serial.printf("@SD,LIST,END,%lu\n", (unsigned long)count);
-  else if (complete) Serial.printf("%lu file(s).\n", (unsigned long)count);
-  else Serial.println("@SD,ERROR,LIST_INCOMPLETE");
-}
-
-bool validSdReadPath(const char *path) {
-  if (!path || path[0] != '/' || !path[1] || strlen(path) >= 170 || strstr(path, ".."))
-    return false;
-  for (const char *cursor = path; *cursor; ++cursor) {
-    if (static_cast<uint8_t>(*cursor) < 32) return false;
-  }
-  return true;
-}
-
-void startSdTransfer(const char *path) {
-  if (!sdReady) { Serial.println("@SD,ERROR,SD_NOT_READY"); return; }
-  if (transferActive) { Serial.println("@SD,ERROR,BUSY"); return; }
-  if (!validSdReadPath(path)) { Serial.println("@SD,ERROR,INVALID_PATH"); return; }
-  File file = SD.open(path, FILE_READ);
-  if (!file || file.isDirectory()) {
-    if (file) file.close();
-    Serial.println("@SD,ERROR,FILE_NOT_FOUND");
-    return;
-  }
-  transferFile = file;
-  transferSize = static_cast<uint32_t>(transferFile.size());
-  transferBytes = 0;
-  transferSequence = 0;
-  transferCrc = 0xFFFFFFFFUL;
-  transferActive = true;
-  Serial.print("@SD,GET,BEGIN,");
-  printSdHex(reinterpret_cast<const uint8_t *>(path), strlen(path));
-  Serial.printf(",%lu\n", (unsigned long)transferSize);
-}
-
-void serviceSdTransfer() {
-  if (!transferActive) return;
-  if (transferBytes == transferSize) {
-    transferFile.close();
-    transferActive = false;
-    Serial.printf("@SD,GET,END,%lu,%08lX\n", (unsigned long)transferBytes,
-                  (unsigned long)(transferCrc ^ 0xFFFFFFFFUL));
-    return;
-  }
-  uint8_t bytes[SD_TRANSFER_CHUNK_BYTES];
-  const size_t remaining = transferSize - transferBytes;
-  const size_t wanted = remaining < sizeof(bytes) ? remaining : sizeof(bytes);
-  const size_t received = transferFile.read(bytes, wanted);
-  if (received != wanted) {
-    transferFile.close();
-    transferActive = false;
-    Serial.println("@SD,ERROR,READ_FAILED");
-    return;
-  }
-  Serial.printf("@SD,GET,DATA,%lu,", (unsigned long)transferSequence++);
-  printSdHex(bytes, received);
-  Serial.println();
-  for (size_t index = 0; index < received; ++index) {
-    transferCrc ^= bytes[index];
-    for (uint8_t bit = 0; bit < 8; ++bit)
-      transferCrc = (transferCrc >> 1) ^ ((transferCrc & 1) ? 0xEDB88320UL : 0);
-  }
-  transferBytes += received;
-}
-
 void handleCommand(char *command) {
   if (strcmp(command, "CAL START") == 0) startCalibration();
   else if (strcmp(command, "CAL CANCEL") == 0) {
@@ -835,18 +658,9 @@ void handleCommand(char *command) {
   } else if (strcmp(command, "CAL SHOW") == 0 ||
              strcmp(command, "CAL EXPORT") == 0) exportCalibration();
   else if (strncmp(command, "CAL IMPORT,", 11) == 0) importCalibration(command + 11);
-  else if (strcmp(command, "SD LIST") == 0) listSdFiles(false);
-  else if (strcmp(command, "SD LISTPROTO") == 0) listSdFiles(true);
-  else if (strncmp(command, "SD GET ", 7) == 0) startSdTransfer(command + 7);
-  else if (strcmp(command, "SD CANCEL") == 0) {
-    if (transferActive) {
-      transferFile.close();
-      transferActive = false;
-      Serial.println("@SD,GET,CANCELLED");
-    }
-  }
+  else if (cloud::command(command)) {}
   else if (strcmp(command, "HELP") == 0) {
-    Serial.println("Commands: CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, SD LIST, SD GET /FILE.CSV, SD CANCEL, HELP");
+    Serial.println("Commands: CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <url>, CLOUD TOKEN <64 hex>, NET STATUS, NET RECONNECT, QUEUE STATUS, QUEUE INIT EMPTY, HELP");
   } else if (command[0]) Serial.println("@CAL,ERROR,UNKNOWN_COMMAND");
 }
 
@@ -860,6 +674,7 @@ void readSerialCommands() {
         commandBuffer[commandLength] = '\0';
         handleCommand(commandBuffer);
       }
+      memset(commandBuffer, 0, sizeof(commandBuffer));
       commandLength = 0;
       commandOverflow = false;
     } else if (!commandOverflow && commandLength < sizeof(commandBuffer) - 1) {
@@ -871,7 +686,7 @@ void readSerialCommands() {
 void setup() {
   Serial.begin(115200);
   delay(1200);
-  Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + MicroSD monitor");
+  Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + WiFi Cloud monitor");
   Serial.println("MQ output is relative gas response, not ammonia ppm.");
   Serial.println("New MQ-135 modules need more than 48 hours of initial conditioning.");
   Serial.println("Type HELP with Newline selected in Serial Monitor.");
@@ -888,20 +703,19 @@ void setup() {
   bmpReady = beginBmp280();
   if (bmpReady) Serial.printf("BMP280: connected at 0x%02X\n", bmpAddress);
   else Serial.println("BMP280: not detected (0x76/0x77)");
-  SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
-  beginSdLog();
+  cloud::begin();
   loadCalibration();
   exportCalibration();
   startedMs = millis();
+  cloud::monitoringStartedUs = esp_timer_get_time();
   takeReading();
   lastSampleMs = millis();
 }
 
 void loop() {
   readSerialCommands();
-  serviceSdTransfer();
+  cloud::announce();
   const uint32_t now = millis();
-  if (!sdReady && now - lastSdAttemptMs >= SD_RETRY_MS) beginSdLog();
   if (now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
     lastSampleMs = now;
     takeReading();

@@ -1,225 +1,179 @@
-# Integrated MQ-135 + AHT20/BMP280 + OLED + MicroSD monitor
+# Wi-Fi + Google Sheets coop monitor
 
-`coop_monitor.ino` combines live monitoring, MicroSD CSV logging, and
-command-triggered clean-air calibration for the ESP32-C3 SuperMini. The sensor
-set is the MQ-135 and a combined AHT20/BMP280 module; the SSD1306 OLED shows
-current values and the main status. The MQ reading is a relative gas response,
-not ammonia ppm. Serial Monitor remains available for live readings and
-calibration commands; no connected computer is needed to save measurements.
+`codex/wifi-cloud` replaces MicroSD logging in the integrated sketch with a
+persistent LittleFS queue and authenticated HTTPS uploads. `main` remains the SD
+version. The MQ-135 reading remains a relative gas response, not ammonia ppm.
 
-## Wiring
+```mermaid
+flowchart LR
+  S[MQ-135 + AHT20/BMP280] --> E[ESP32-C3 SuperMini]
+  E --> O[OLED]
+  E --> Q[Internal flash queue]
+  Q --> W[2.4 GHz Wi-Fi + internet]
+  W --> A[Apps Script endpoint]
+  A --> G[Private Google Sheet]
+```
+
+## Wiring and power
+
+Remove the MicroSD module. The sensor wiring is unchanged:
 
 | Module pin | ESP32-C3 connection |
 |---|---|
-| MQ-135 VCC | 5V / VBUS |
-| MQ-135 GND | GND |
-| MQ-135 AO | 10 kOhm resistor to GPIO3; second 10 kOhm resistor from GPIO3 to GND |
-| MQ-135 DO | Not connected |
-| AHT20/BMP280 combo VCC | 3V3 |
-| AHT20/BMP280 combo GND | GND |
-| AHT20/BMP280 combo SDA | GPIO4 |
-| AHT20/BMP280 combo SCL | GPIO5 |
-| SSD1306 OLED VCC | 3V3 |
-| SSD1306 OLED GND | GND |
-| SSD1306 OLED SDA | GPIO4 |
-| SSD1306 OLED SCL | GPIO5 |
-| MicroSD adapter VCC | 5V / VBUS, after confirming this adapter accepts 5 V |
-| MicroSD adapter GND | GND |
-| MicroSD adapter CS | GPIO10 |
-| MicroSD adapter SCK | GPIO6 |
-| MicroSD adapter MOSI | GPIO7 |
-| MicroSD adapter MISO | GPIO1, after confirming its output does not exceed 3.3 V |
+| MQ-135 VCC / GND | 5 V / VBUS and GND |
+| MQ-135 AO | 10 kOhm to GPIO3; another 10 kOhm from GPIO3 to GND |
+| MQ-135 DO | Unconnected |
+| AHT20/BMP280 VCC / GND | 3V3 and GND |
+| AHT20/BMP280 SDA / SCL | GPIO4 / GPIO5 |
+| SSD1306 OLED VCC / GND | 3V3 and GND |
+| SSD1306 OLED SDA / SCL | GPIO4 / GPIO5 |
 
 ```text
-ESP32-C3 SuperMini                 Modules
-5V / VBUS ──────────────────────── MQ-135 VCC; MicroSD VCC (verify 5 V rating)
-3V3 ────────────────────────────── AHT20/BMP280 VCC; SSD1306 OLED VCC
-GND ────────────────────────────── MQ-135, AHT20/BMP280, OLED, MicroSD GND
-GPIO4 (SDA) ────────────────────── AHT20/BMP280 SDA; OLED SDA
-GPIO5 (SCL) ────────────────────── AHT20/BMP280 SCL; OLED SCL
-GPIO10 ─────────────────────────── MicroSD CS
-GPIO6 ──────────────────────────── MicroSD SCK
-GPIO7 ──────────────────────────── MicroSD MOSI
-GPIO1 ◄─────────────────────────── MicroSD MISO (verify <= 3.3 V)
+USB 5 V supply / power bank --> ESP32-C3 USB
+5V / VBUS -------------------- MQ-135 VCC
+3V3 -------------------------- AHT20/BMP280 VCC; OLED VCC
+GND -------------------------- all module grounds
+GPIO4 (SDA) ------------------ AHT20/BMP280 SDA; OLED SDA
+GPIO5 (SCL) ------------------ AHT20/BMP280 SCL; OLED SCL
 
-MQ-135 AO ── 10 kOhm ──┬────────── GPIO3
-                        │
-                      10 kOhm
-                        │
-                       GND
-MQ-135 DO ──────────────────────── Not connected
+MQ-135 AO --- 10 kOhm ---+----- GPIO3
+                         |
+                       10 kOhm
+                         |
+                        GND
 ```
 
-The pictured six-pin SPI MicroSD adapter has, from top to bottom with its card
-slot facing you and the header on the right: `CS`, `SCK`, `MOSI`, `MISO`, `VCC`,
-`GND`. Its visible components suggest a regulator and logic buffer, but their
-exact ratings cannot be read from the photo. Confirm the actual adapter accepts
-5 V at `VCC` and measure `MISO` at no more than 3.3 V before connecting it to
-GPIO1. The MicroSD connections avoid the ESP32-C3 boot strapping pins GPIO2,
-GPIO8, and GPIO9. The integrated sketch initializes SPI on these pins and
-writes its CSV readings to the card.
+Use a stable USB supply suitable for the sensor heater, ESP32 Wi-Fi current
+peaks, and display. A computer is needed for flashing/configuration; the monitor
+then runs independently while powered and within Wi-Fi range. Internet and NTP
+access are needed for certificate-validated uploads.
 
-The combo module and OLED share the 3.3 V I2C bus on GPIO4/GPIO5. The sketch
-looks for AHT20 at `0x38`, BMP280 at `0x76` or `0x77`, and OLED at `0x3C` or
-`0x3D`. Confirm the actual modules support 3.3 V power and I2C levels. Measure
-the divider output before connecting GPIO3. All modules and the ESP32-C3 need
-a common ground. Keep the combo sensor away from the MQ heater.
+## Monitoring and queue
 
-## Arduino setup and operation
+Sensors are sampled every two seconds. Calibration, warm-up, warning thresholds,
+OLED readings, and readable Serial measurements are preserved. A separate
+FreeRTOS task handles connection, clock synchronization, and HTTPS requests.
+Gas/ADC warnings keep OLED priority; otherwise the bottom status line alternates
+between sensor status and network state/pending count. Serial reports network
+changes, failures, pending count, and cumulative discarded records.
 
-Install **ESP32 by Espressif Systems**, **Adafruit AHTX0**, **Adafruit BMP280**,
-**Adafruit SSD1306**, and **Adafruit GFX** in Arduino IDE, accepting prompted
-dependencies. The SPI and SD libraries come with the ESP32 board package.
-Select the ESP32-C3 board, enable **Tools > USB CDC On Boot**,
-and upload `coop_monitor.ino`. The sketch sends labeled reading blocks at 115200
-baud every two seconds, with units beside each value and separate AHT20 and
-BMP280 lines. It checks the saved calibration in
-ESP32 Preferences after boot.
+The first reading is queued, followed by one every 30 seconds and whenever sensor
+status changes. Network status changes alone do not create records. Each compact
+record contains sensor data/status, sample number, boot ID, persistent sequence,
+uptime, discarded count, and sampled UTC milliseconds when the clock is known.
+Unsynchronized samples stay unknown even if uploaded later; Sheets independently
+records receipt time. IDs include device MAC identity, random boot ID, and sequence.
 
-The 128x64 OLED refreshes with each two-second sample. It shows MQ ADC mV,
-ratio to the stored clean-air baseline, threshold, AHT20 temperature and
-humidity, BMP280 temperature and pressure, and the highest-priority status.
-`--` means a value is unavailable. The complete set of status flags remains in
-the Serial block and CSV row, using readable status labels. An OLED failure
-does not stop Serial readings or logging.
+The verified format is **128 bytes x 4,096 records = 524,288 bytes (512 KiB)**.
+At the periodic rate this represents **34 hours 8 minutes**; status changes shorten
+that duration. Filesystem metadata, retired portions of segments, and recovery
+workspace use additional space in the 1,920 KiB LittleFS partition. This is a
+verified logical capacity, not a physical flash endurance or power-cut result.
+`QUEUE STATUS` reports actual mounted filesystem space on the device.
 
-A new MQ-135 needs more than 48 hours of continuous initial conditioning
-before its first clean-air calibration. Put the conditioned sensor in stable,
-well-ventilated reference air away from the coop and strong gas sources. Send
-`CAL START` with **Newline** selected in Arduino Serial Monitor. The sketch
-stabilizes for ten minutes, then collects readings for five minutes. A valid
-calibration needs at least 60 usable MQ/AHT20 samples. BMP280 pressure is
-logged but is not used in the MQ threshold formula. `CAL CANCEL` stops
-collection without replacing the previous calibration; `CAL SHOW` prints the
-saved values. If calibration succeeds, the ESP32 saves the result in Preferences.
+Overflow retires the oldest pending record and increments a persistent discarded
+counter before retaining the new reading. This counts queue retirement; a lost
+cloud acknowledgement can mean a retired record already exists in Sheets.
+Batches contain up to 20 oldest records. Only matching acknowledged IDs advance
+the queue; failed/lost acknowledgements retry with delays increasing from 5 seconds
+to 5 minutes. Server deduplication makes retries safe.
 
-The initial gas warning threshold is the larger of **15% above the clean-air
-ADC baseline** and **baseline plus three standard deviations**. The sketch
-requires three consecutive two-second readings over this threshold. Warnings
-are disabled during boot warm-up, calibration, missing calibration, or an
-ADC-high reading. `AHT_ERROR`, `BMP_ERROR`, and `OLED_ERROR` identify missing
-or invalid peripheral readings; an existing MQ calibration can still drive a
-gas warning if a peripheral fails. The threshold assumes the module voltage
-rises with the response of interest; confirm this with the actual module
-before using the warning in a coop.
+CRC-protected records and two metadata checkpoints recover committed appends.
+A short interrupted append is trimmed to the valid prefix. Corrupt complete
+records, missing metadata for an existing log, or mount failures stop queue
+storage and report an error. **No error automatically formats flash.** Live
+monitoring continues, but readings cannot be retained while the queue is broken.
 
-## MicroSD logging
+## Build and initial upload
 
-Insert a FAT32-formatted card and power the ESP32-C3 to start saving readings
-on the card.
-The first available `/COOP0001.CSV` through `/COOP9999.CSV` filename is chosen
-for each boot, so uptime resets do not mix in one file. The first sample is
-saved immediately, then one sample every 30 seconds and whenever the status
-changes. The two-second sampling and gas-warning checks continue independently
-of file writes. Each row is closed after writing to limit data loss on power
-interruption. Power off the board before removing the card to read it on a
-computer.
-
-If the card is missing or cannot be written, Serial reports the error and the
-OLED shows `SD ERROR` unless a gas or ADC warning has higher priority. A card
-removed during operation may not be detected until the next scheduled write. The
-firmware retries mounting the card every ten seconds; monitoring and Serial
-output continue. After reinsertion during the same boot, logging resumes in
-the same file. The existing clean-air calibration is kept in ESP32 Preferences;
-`CAL SHOW` or `CAL EXPORT` can still print it over Serial for manual backup.
-The former Windows capture scripts are retained as legacy tools but are not
-needed for MicroSD logging.
-
-### List and download files through USB
-
-With the ESP32-C3 connected to a computer, open Serial Monitor at 115200 baud,
-select **Newline**, and send `SD LIST`. The monitor prints each file path and
-size, including files in subdirectories (up to eight directory levels). This
-does not remove or change any files. `HELP` shows the available commands.
-
-To save a file on Windows, close Serial Monitor and any manually started
-computer logger, then run `start_sd_transfer.cmd` in this folder. The helper
-finds a non-Bluetooth COM port (or asks you to choose one), lists the card's
-files, and prompts for a file number. It saves the selected file under
-`outputs/sd_downloads/`, adding a number to the name if a copy already exists.
-It checks the byte count and CRC32 before keeping the download. Choose `R` to
-refresh the list or `Q` to quit. For a specific port or destination, run:
+Install Arduino ESP32 core and the Adafruit AHTX0, BMP280, SSD1306, GFX, BusIO,
+and Unified Sensor libraries. The implementation was compiled with ESP32 core
+3.3.11. Target `ESP32-C3 Super Mini`, USB CDC enabled, 4 MB flash, no OTA,
+erase-all disabled. The supplied `partitions.csv` reserves a 2 MiB application
+and keeps NVS at `0x9000` with size `0x5000`, as in the SD version.
 
 ```powershell
-pwsh -NoProfile -File .\firmware\coop_monitor\sd_transfer.ps1 -Port COM7 -OutputDirectory C:\Users\Ando\Downloads
+.\firmware\coop_monitor\build_wifi_cloud.ps1
+.\firmware\coop_monitor\upload_wifi_cloud.ps1 -Port COM7
 ```
 
-Only one application can own the COM port. Close the transfer helper before
-reopening Serial Monitor or starting manual computer capture. The helper runs
-only when launched and exits when you quit. Monitoring, OLED updates, and live
-Serial readings continue during a download; writes to the MicroSD card pause
-until it finishes. This means a long download can omit some scheduled CSV rows.
-The helper does not delete or modify the MicroSD file. If the connection fails
-or the verification does not match, it removes its partial computer copy.
+Replace `COM7` with the monitor's actual port. Close Serial Monitor first:
+**only one process may own the COM port at a time**. The upload helper builds,
+checks chip/flash using read-only `esptool flash-id`, requires a 4 MB ESP32-C3,
+exports calibration to ignored `outputs/wifi-cloud/backups`, and uploads without
+erasing NVS. It aborts if either hardware identification or calibration export
+fails. Run `CAL SHOW` afterward and compare the backed-up values.
 
-The firmware uses `SD LISTPROTO` for the helper and `SD GET /PATH/FILE.CSV` to
-send hex-encoded chunks with sequence numbers and a final CRC32. These are
-Serial commands, so the ESP32-C3 does not appear as a USB storage drive.
+On a **known new/empty filesystem only**, explicitly send `QUEUE INIT EMPTY`
+once to provision LittleFS. This command can erase an unmountable volume; do not
+use it to repair a volume containing readings. A mounted volume is never erased
+by this command. Preserve recoverable flash before investigating storage errors.
 
-### Reading format
+## Configure Wi-Fi and cloud
 
-Serial Monitor displays the following six-line block with a blank line between
-samples (illustrative values, not a recorded measurement):
+Create/deploy the endpoint using [Apps Script instructions](../../cloud/apps-script/README.md).
+Use a regular 2.4 GHz network, not a captive portal. Open Serial Monitor at
+115200 baud with a newline, then enter:
 
 ```text
---- Sample 900 | Uptime 00:30:00 ---
-MQ-135  : ADC 1100 mV | Output 2.200 V | Raw 1800
-Baseline: 1.1000x (+10.0%) | Warning threshold 1150 mV
-AHT20   : Temperature 29.45 C | Humidity 72.30 %RH
-BMP280  : Temperature 30.12 C | Pressure 1008.65 hPa
-Status  : OK
+WIFI SSID your-network-name
+WIFI PASS your-network-password
+CLOUD URL https://script.google.com/macros/s/DEPLOYMENT_ID/exec
+CLOUD TOKEN your-64-character-hex-device-token
+NET STATUS
+QUEUE STATUS
 ```
 
-The baseline percentage is the change in ADC voltage relative to the stored
-clean-air baseline, not a gas concentration. The displayed threshold is rounded
-to whole mV; warning comparisons still use the stored, unrounded value. Uptime
-uses hours:minutes:seconds, with hours continuing past 24. Without calibration,
-the baseline line reads `Baseline: NA | Warning threshold NA mV`.
+SSID is at most 32 bytes; password is 8-63 bytes, or 64 hexadecimal characters.
+`WIFI OPEN` explicitly selects an open network. Tokens are 64 hexadecimal
+characters. Use the deployed `/exec` URL, not the editor URL or `/dev` URL.
+`NET RECONNECT` forces connection retry. Secrets are masked in firmware output;
+Serial input and terminal echo should not be captured in public logs.
 
-The same sample becomes this MicroSD CSV row:
+Settings persist in Preferences namespace `coopnet`; calibration remains in
+`coopcal`. Wi-Fi/cloud changes do not reset calibration. Local device settings
+in `cloud.local.json` are excluded from Git. The manually launched helper below
+prompts for the Wi-Fi password without echo and reads the endpoint/token from
+that ignored file; it closes the port after configuring the device:
 
-```csv
-Record reason,Sample number,Uptime (s),MQ raw ADC,MQ ADC (mV),MQ output (V),MQ baseline ratio,AHT temperature (C),Humidity (%RH),BMP temperature (C),Pressure (hPa),Status
-Periodic,900,1800,1800,1100,2.200,1.1000,29.45,72.30,30.12,1008.65,OK
+```powershell
+.\firmware\coop_monitor\configure_network.ps1 -Port COM7
 ```
 
-CSV units live in the headings so available measurements remain numeric.
-Unavailable measurements use `NA`. The ESP32-C3 has no real-time clock in this
-build, so the file uses uptime since boot rather than an invented date/time.
-`Record reason` is `Periodic` or `Status change`. Saved readings are individual
-samples, not 30-second averages. A status-change save restarts the 30-second
-interval.
+Google HTTPS certificates are validated against the included public Google PKI
+roots. The first POST carries the token only to `script.google.com`. A Content
+Service redirect is followed only to `script.googleusercontent.com` using GET
+without replaying the token/body. The Sheet stays private; the public endpoint
+rejects invalid device tokens and malformed records.
 
-| Internal flag | Serial and CSV label |
-|---|---|
-| `OK` | OK |
-| `WARMUP` | Warming up |
-| `CAL_MISSING` | Calibration missing |
-| `CAL_STABILIZING` | Calibration stabilizing |
-| `CAL_COLLECTING` | Calibration collecting |
-| `AHT_ERROR` | AHT sensor error |
-| `BMP_ERROR` | BMP sensor error |
-| `OLED_ERROR` | OLED error |
-| `MQ_ADC_HIGH` | MQ ADC high |
-| `GAS_WARNING` | Gas warning |
+## Calibration and checks
 
-Multiple labels are separated by ` | `. Calibration commands and `@CAL`
-responses remain on Serial. Recalibrate when replacing the MQ sensor or
-changing its analog circuit.
+Existing `CAL SHOW`, `CAL START`, `CAL CANCEL`, `CAL EXPORT`, `CAL IMPORT`,
+and `HELP` remain available. See `HELP` for the import syntax and
+existing calibration workflow. Calibration is still performed in clean air after
+sensor warm-up, not by assigning a guessed ammonia concentration. Legacy SD
+transfer commands/helpers apply only to `main`.
 
-## Offline verification
+Condition a new MQ-135 for more than 48 hours initially. `CAL START` uses ten
+minutes of stabilization followed by five minutes of collection with at least
+60 valid samples. Failed/cancelled calibration preserves the previous result.
+The warning threshold is the larger of baseline + 15% and baseline + 3 standard
+deviations, and requires three consecutive qualifying samples. Boot warm-up,
+active calibration, missing calibration and ADC-high states suppress gas warnings.
 
-Run `pwsh -NoProfile -File .\firmware\coop_monitor\sd_transfer.ps1 -SelfTest`
-to check file-list parsing, a complete download, CRC32 verification, and
-partial-file cleanup after a corrupted transfer. This uses a simulated serial
-transcript; the physical USB and MicroSD path still needs a connected board.
+For restoration, replace the `@CAL,DATA,` prefix in a saved export line with
+`CAL IMPORT,` and send the remaining fields unchanged. Do not import a backup
+from a different MQ module, pin or voltage divider. `CAL SHOW`/`CAL EXPORT`
+produce either the accepted data or `@CAL,MISSING,mq135-01`.
 
-Run `pwsh -NoProfile -File .\firmware\coop_monitor\test_reading_format.ps1`
-from the workspace root. This checks numeric CSV fields, `NA`, readable status
-labels, and the Serial format. With `g++` available, it compiles the actual
-Serial and MicroSD formatting functions with a host adapter. This does not
-compile the ESP32 SD library or test card mounting, writes, or physical wiring.
-The sketch compiled for `Nologo ESP32C3 Super Mini` with the installed ESP32
-core 3.3.11. It has not been uploaded or run on the physical board. After
-uploading, read the card on a computer to confirm the file and sample rows
-before relying on it.
+```powershell
+.\firmware\coop_monitor\test_wifi_cloud.ps1
+```
+
+This runs queue fault injection, the existing reading formatter checks, and
+Apps Script ingestion/deduplication tests. [Verification results](../../VERIFICATION.md)
+distinguish these from live cloud and physical flash tests. Before unattended use,
+verify actual sampling/warnings during wrong Wi-Fi credentials and internet
+outages, duplicate/lost-ack retries, overflow, restart/power-cut recovery, and
+calibration persistence. Switching back to `main` requires rebuilding/uploading
+its SD firmware; a Git checkout alone does not change the device.

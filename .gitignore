@@ -6,10 +6,12 @@
 /.codex_spreadsheet_review/
 /.codex-remote-attachments/
 /node_modules/
+/firmware/coop_monitor/cloud.local.json
 
 # Local sensor captures and downloads
 *.log
 *.csv
+!/firmware/coop_monitor/partitions.csv
 
 # Editor and system files
 .vscode/
