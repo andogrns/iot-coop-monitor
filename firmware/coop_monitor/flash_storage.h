@@ -4,9 +4,14 @@
 
 class FlashStorage : public coop::Storage {
  public:
+  explicit FlashStorage(const char *scope = "") {
+    snprintf(scope_, sizeof(scope_), "%s", scope);
+    snprintf(queuePath_, sizeof(queuePath_), "%s/queue", scope_);
+  }
   bool mount() {
     mounted_ = LittleFS.begin(false); // Never format a failed mount.
-    if (mounted_ && !LittleFS.exists("/queue")) mounted_ = LittleFS.mkdir("/queue");
+    if (mounted_ && scope_[0] && !LittleFS.exists(scope_)) mounted_ = LittleFS.mkdir(scope_);
+    if (mounted_ && !LittleFS.exists(queuePath_)) mounted_ = LittleFS.mkdir(queuePath_);
     return mounted_;
   }
   bool initializeEmpty() {
@@ -17,20 +22,23 @@ class FlashStorage : public coop::Storage {
   }
   bool mounted() const { return mounted_; }
   bool readMetadata(unsigned slot, coop::Metadata &m) override {
-    File f = LittleFS.open(slot ? "/meta.b" : "/meta.a", "r");
+    char path[64]; scoped(slot ? "/meta.b" : "/meta.a", path);
+    File f = LittleFS.open(path, "r");
     if (!f || f.size() != sizeof(m)) return false;
     return f.read(reinterpret_cast<uint8_t *>(&m), sizeof(m)) == sizeof(m);
   }
   bool writeMetadata(unsigned slot, const coop::Metadata &m) override {
-    File f = LittleFS.open("/meta.tmp", "w");
+    char temp[64], path[64]; scoped("/meta.tmp", temp);
+    scoped(slot ? "/meta.b" : "/meta.a", path);
+    File f = LittleFS.open(temp, "w");
     if (!f || f.write(reinterpret_cast<const uint8_t *>(&m), sizeof(m)) != sizeof(m))
       return false;
     f.flush();
     f.close();
-    return LittleFS.rename("/meta.tmp", slot ? "/meta.b" : "/meta.a");
+    return LittleFS.rename(temp, path);
   }
   bool append(const coop::Record &r) override {
-    char path[40];
+    char path[64];
     segmentPath(r.sequence / coop::RECORDS_PER_SEGMENT, path);
     File f = LittleFS.open(path, "a");
     if (!f || f.size() % sizeof(r) != 0 || f.size() >= sizeof(r) * 64) return false;
@@ -45,7 +53,7 @@ class FlashStorage : public coop::Storage {
     if (!list(segments, count)) return false;
     uint64_t previous = 0;
     for (size_t i = 0; i < count; ++i) {
-      char path[40]; segmentPath(segments[i].bucket, path);
+      char path[64]; segmentPath(segments[i].bucket, path);
       File f = LittleFS.open(path, "r");
       if (!f) return false;
       const size_t size = f.size();
@@ -72,7 +80,7 @@ class FlashStorage : public coop::Storage {
     if (!list(segments, length)) return false;
     for (size_t i = 0; i < length && count < capacity; ++i) {
       if (segments[i].bucket * 64 + 63 <= through) continue;
-      char path[40]; segmentPath(segments[i].bucket, path);
+      char path[64]; segmentPath(segments[i].bucket, path);
       File f = LittleFS.open(path, "r");
       if (!f || f.size() % sizeof(coop::Record)) return false;
       coop::Record r;
@@ -91,7 +99,7 @@ class FlashStorage : public coop::Storage {
       // Keep the current (possibly partial) segment to avoid reopening sequence
       // numbers in a different physical file after an empty-queue restart.
       if (segments[i].bucket * 64 + 63 <= through) {
-        char path[40]; segmentPath(segments[i].bucket, path);
+        char path[64]; segmentPath(segments[i].bucket, path);
         if (!LittleFS.remove(path)) return false;
       }
     }
@@ -101,12 +109,14 @@ class FlashStorage : public coop::Storage {
   struct Segment { uint64_t bucket; };
   static constexpr size_t MAX_SEGMENTS = 80;
   bool mounted_ = false;
-  static void segmentPath(uint64_t bucket, char *path) {
-    snprintf(path, 40, "/queue/%016llX.bin", (unsigned long long)bucket);
+  char scope_[20]{}, queuePath_[40]{};
+  void scoped(const char *suffix, char *path) const { snprintf(path, 64, "%s%s", scope_, suffix); }
+  void segmentPath(uint64_t bucket, char *path) const {
+    snprintf(path, 64, "%s/%016llX.bin", queuePath_, (unsigned long long)bucket);
   }
   bool list(Segment *segments, size_t &count) {
     count = 0;
-    File root = LittleFS.open("/queue", "r");
+    File root = LittleFS.open(queuePath_, "r");
     if (!root || !root.isDirectory()) return false;
     File entry = root.openNextFile();
     while (entry) {
@@ -132,7 +142,8 @@ class FlashStorage : public coop::Storage {
   }
   bool repairTail(const char *path, size_t length) {
     File source = LittleFS.open(path, "r");
-    File target = LittleFS.open("/repair.tmp", "w");
+    char temp[64]; scoped("/repair.tmp", temp);
+    File target = LittleFS.open(temp, "w");
     if (!source || !target) return false;
     uint8_t buffer[256];
     while (length) {
@@ -141,6 +152,6 @@ class FlashStorage : public coop::Storage {
       length -= n;
     }
     target.flush(); source.close(); target.close();
-    return LittleFS.rename("/repair.tmp", path);
+    return LittleFS.rename(temp, path);
   }
 };

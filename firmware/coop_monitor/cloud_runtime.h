@@ -11,6 +11,9 @@
 #include <ctype.h>
 #include "flash_storage.h"
 #include "google_roots.h"
+#include "quick_runtime.h"
+#include <esp_mac.h>
+#include <nvs.h>
 
 namespace cloud {
 struct Settings {
@@ -30,7 +33,8 @@ struct State {
 };
 static Settings settings;
 static State state;
-static FlashStorage storage;
+static FlashStorage storage("/quicktest");
+static bool uploadRequested = false, uploadBusy = false;
 static coop::Queue queue(storage);
 static SemaphoreHandle_t mutex = nullptr;
 static TaskHandle_t worker = nullptr;
@@ -90,10 +94,24 @@ inline const char *statusName(unsigned bit) {
     "BMP sensor error", "OLED error", "MQ ADC high", "Gas warning"};
   return names[bit];
 }
-inline char *payload(const Settings &config, const coop::Record *records, size_t count) {
+inline char *payload(const Settings &config, const coop::Record *records, size_t count, const quick::Metadata &test) {
   cJSON *root = cJSON_CreateObject();
   if (!root) return nullptr;
-  cJSON_AddNumberToObject(root, "version", 1);
+  cJSON_AddNumberToObject(root, "version", 2);
+  cJSON *session = cJSON_AddObjectToObject(root, "session");
+  if (!session) { cJSON_Delete(root); return nullptr; }
+  char sessionId[33]; quick::idText(test.id, sessionId);
+  cJSON_AddStringToObject(session, "id", sessionId);
+  cJSON_AddNumberToObject(session, "duration_min", test.durationMs / 60000);
+  cJSON_AddStringToObject(session, "outcome", quick::phaseName(test.phase));
+  cJSON *cal = cJSON_AddObjectToObject(session, "calibration");
+  if (!cal) { cJSON_Delete(root); return nullptr; }
+  addNumber(cal, "baseline_mv", test.calibration.baselineMv);
+  addNumber(cal, "threshold_mv", test.calibration.thresholdMv);
+  addNumber(cal, "sd_mv", test.calibration.sdMv);
+  cJSON_AddNumberToObject(cal, "samples", test.calibration.samples);
+  addNumber(cal, "temperature_c", test.calibration.temperatureC);
+  addNumber(cal, "humidity_pct", test.calibration.humidityPercent);
   cJSON_AddStringToObject(root, "token", config.token);
   cJSON *array = cJSON_AddArrayToObject(root, "records");
   for (size_t i = 0; i < count && array; ++i) {
@@ -107,6 +125,7 @@ inline char *payload(const Settings &config, const coop::Record *records, size_t
     char boot[33];
     for (unsigned n = 0; n < 16; ++n) snprintf(boot + n * 2, 3, "%02x", r.boot[n]);
     cJSON_AddStringToObject(item, "boot_id", boot);
+    cJSON_AddNumberToObject(item, "elapsed_test_s", quick::elapsed(r) / 1000.0);
     cJSON_AddNumberToObject(item, "sample", r.sample);
     cJSON_AddNumberToObject(item, "uptime_s", r.uptimeMs / 1000.0);
     if (r.sampledUtcMs) cJSON_AddNumberToObject(item, "sampled_utc_ms", r.sampledUtcMs);
@@ -172,8 +191,10 @@ inline bool response(HTTPClient &http, const coop::Record *records, size_t count
   return length >= 0 && !body.overflow && acknowledged(body.text, records, count);
 }
 inline bool upload(const Settings &config, const coop::Record *records, size_t count,
-                   const char *&error) {
-  char *json = payload(config, records, count);
+                   const char *&error, const quick::Metadata &test) {
+  for (size_t i = 0; i < count; ++i) if (records[i].reserved[20] != 1 ||
+      memcmp(records[i].reserved, test.id, 16)) { error = "SESSION ID MISMATCH"; return false; }
+  char *json = payload(config, records, count, test);
   if (!json) { error = "UPLOAD MEMORY ERROR"; return false; }
   NetworkClientSecure client;
   client.setCACert(GOOGLE_ROOTS);
@@ -209,10 +230,17 @@ inline bool upload(const Settings &config, const coop::Record *records, size_t c
 inline void workerTask(void *) {
   uint32_t activeRevision = UINT32_MAX;
   uint32_t lastConnect = 0, nextAttempt = 0, retryMs = 5000;
-  configTime(0, 0, "time.google.com", "pool.ntp.org");
+  bool clockStarted = false;
   for (;;) {
-    Settings config;
-    { Guard lock; config = settings; }
+    Settings config; bool requested;
+    { Guard lock; config = settings; requested = uploadRequested; }
+    if (!requested) {
+      if (WiFi.getMode() != WIFI_OFF) { WiFi.disconnect(true); WiFi.mode(WIFI_OFF); }
+      { Guard lock; state.wifi = false; }
+      vTaskDelay(pdMS_TO_TICKS(250)); continue;
+    }
+    WiFi.mode(WIFI_STA);
+    if (!clockStarted) { configTime(0, 0, "time.google.com", "pool.ntp.org"); clockStarted = true; }
     const uint32_t now = millis();
     if (activeRevision != config.revision) {
       WiFi.disconnect(); activeRevision = config.revision;
@@ -227,27 +255,32 @@ inline void workerTask(void *) {
     } else if (time(nullptr) < 1704067200) message("WAITING FOR CLOCK", true);
     else if (static_cast<int32_t>(now - nextAttempt) >= 0) {
       coop::Record records[coop::BATCH_SIZE]; size_t count;
-      bool ready;
-      { Guard lock; ready = queue.batch(records, coop::BATCH_SIZE, count); refreshQueueState(); }
-      if (!ready) message("FLASH QUEUE ERROR", true);
-      else if (!count) message("CLOUD READY", true);
+      bool ready; quick::Metadata test;
+      { Guard lock;
+        if (!uploadRequested) continue;
+        ready = queue.batch(records, coop::BATCH_SIZE, count);
+        test = quick::session.data(); uploadBusy = ready && count; refreshQueueState(); }
+      if (!ready) { { Guard lock; uploadRequested = false; } message("FLASH QUEUE ERROR", true); }
+      else if (!count) { { Guard lock; uploadRequested = false; } message("UPLOAD COMPLETE", true); }
       else {
         message("UPLOADING", true);
         const char *error = "UPLOAD FAILED";
-        if (upload(config, records, count, error)) {
+        if (upload(config, records, count, error, test)) {
           bool saved;
           { Guard lock;
             saved = queue.acknowledge(records[count - 1].sequence);
             if (saved) state.lastUploadMs = millis();
             refreshQueueState();
           }
-          message(saved ? "CLOUD READY" : "FLASH QUEUE ERROR", true);
+          if (!saved) { Guard lock; uploadRequested = false; }
+          message(saved ? "UPLOAD ACKNOWLEDGED" : "FLASH QUEUE ERROR", true);
           retryMs = 5000;
         } else {
           message(error, WiFi.status() == WL_CONNECTED);
           retryMs = retryMs < 150000 ? retryMs * 2 : 300000;
         }
       }
+      { Guard lock; uploadBusy = false; }
       nextAttempt = millis() + retryMs;
     }
     vTaskDelay(pdMS_TO_TICKS(250));
@@ -257,8 +290,8 @@ inline void begin() {
   mutex = xSemaphoreCreateMutex();
   if (!mutex) { Serial.println("@NET,ERROR,MUTEX_ALLOCATION"); return; }
   WiFi.persistent(false);
-  WiFi.mode(WIFI_STA);
-  uint8_t mac[6]; WiFi.macAddress(mac);
+  WiFi.mode(WIFI_OFF);
+  uint8_t mac[6]; esp_read_mac(mac, ESP_MAC_WIFI_STA);
   snprintf(deviceId, sizeof(deviceId), "coop-%02x%02x%02x%02x%02x%02x",
            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   esp_fill_random(bootId, sizeof(bootId));
@@ -278,6 +311,7 @@ inline void begin() {
   refreshQueueState();
   state.configured = settings.complete();
   WiFi.setAutoReconnect(true);
+  if (state.queueReady) snprintf(state.message, sizeof(state.message), "WAITING FOR TEST UPLOAD");
   if (xTaskCreate(workerTask, "cloud-upload", 14336, nullptr, 1, &worker) != pdPASS)
     snprintf(state.message, sizeof(state.message), "UPLOAD TASK ERROR");
 }
@@ -311,7 +345,7 @@ inline bool command(const char *text) {
     if (ESP.getFlashChipSize() != 4 * 1024 * 1024 || storage.mounted()) {
       Serial.println("@QUEUE,ERROR,INIT_REFUSED"); return true;
     }
-    const bool ok = storage.initializeEmpty() && queue.recover();
+    const bool ok = storage.initializeEmpty() && queue.recover() && quick::recover(storage, queue);
     refreshQueueState();
     Serial.println(ok ? "@QUEUE,INITIALIZED" : "@QUEUE,ERROR,INIT_FAILED");
     return true;
@@ -352,6 +386,84 @@ inline bool command(const char *text) {
     Serial.println(ok ? "@NET,SAVED" : "@NET,ERROR,SAVE_FAILED"); return true;
   }
   return false;
+}
+inline bool calibrationLocked() {
+  Guard lock;
+  return quick::session.data().phase == quick::ARMED || quick::session.data().phase == quick::RECORDING;
+}
+inline bool testCommand(const char *text, const quick::CalibrationSnapshot &cal, bool calibrationReady) {
+  if (strncmp(text, "TEST ", 5)) return false;
+  if (!mutex) { Serial.println("@TEST,ERROR,MUTEX_UNAVAILABLE"); return true; }
+  Guard lock;
+  if (!strcmp(text, "TEST STATUS")) {
+    const quick::Metadata &test = quick::session.data();
+    char id[33]; quick::idText(test.id, id);
+    Serial.printf("@TEST,STATUS,%s,id=%s,duration_min=%lu,elapsed_s=%lu,saved=%lu,pending=%lu,metadata=%s,upload=%s\n",
+      quick::phaseName(test.phase), id, (unsigned long)(test.durationMs / 60000),
+      (unsigned long)(quick::session.elapsed(millis()) / 1000), (unsigned long)test.saved,
+      (unsigned long)queue.pending(), quick::session.ready() ? "ready" : "error",
+      uploadRequested || uploadBusy ? "active" : test.saved && !queue.pending() ? "complete" : "manual");
+    if (storage.mounted()) Serial.printf("@TEST,FLASH,chip_bytes=%lu,fs_total=%lu,fs_used=%lu,queue_capacity=4096,record_bytes=128\n",
+      (unsigned long)ESP.getFlashChipSize(), (unsigned long)LittleFS.totalBytes(), (unsigned long)LittleFS.usedBytes());
+    nvs_stats_t stats{};
+    if (nvs_get_stats(nullptr, &stats) == ESP_OK)
+      Serial.printf("@TEST,NVS,free_entries=%lu,total_entries=%lu,calibration_bytes=64,session_checkpoint_bytes=256\n",
+        (unsigned long)stats.free_entries, (unsigned long)stats.total_entries);
+  } else if (!strcmp(text, "TEST ARM 15") || !strcmp(text, "TEST ARM 30")) {
+    const unsigned minutes = !strcmp(text, "TEST ARM 15") ? 15 : 30;
+    const size_t budget = (minutes * 30 + 63) * sizeof(coop::Record) + 65536;
+    if (!calibrationReady || uploadRequested || uploadBusy || !storage.mounted() ||
+        LittleFS.totalBytes() - LittleFS.usedBytes() < budget) {
+      Serial.println("@TEST,ERROR,ARM_NEEDS_CALIBRATION_FREE_STORAGE_AND_IDLE_UPLOAD"); return true;
+    }
+    uint8_t id[16]; esp_fill_random(id, sizeof(id));
+    const bool ok = quick::session.arm(minutes, id, cal, queue.ready(), queue.pending());
+    Serial.println(ok ? "@TEST,ARMED,POWER_OFF_THEN_POWER_ON_AT_SITE" : "@TEST,ERROR,ARM_REFUSED_CHECK_PENDING_AND_METADATA");
+  } else if (!strcmp(text, "TEST STOP")) {
+    const bool ok = quick::session.stop(millis());
+    Serial.println(ok ? "@TEST,STOPPED" : "@TEST,ERROR,NOT_RECORDING_OR_ARMED");
+  } else if (!strcmp(text, "TEST UPLOAD CANCEL")) {
+    uploadRequested = false;
+    Serial.println("@TEST,UPLOAD_CANCELLED,IN_FLIGHT_ACK_MAY_FINISH");
+  } else if (!strcmp(text, "TEST UPLOAD")) {
+    if (!quick::session.closed() || !queue.ready() || !settings.complete()) {
+      Serial.println("@TEST,ERROR,UPLOAD_NEEDS_FINISHED_SESSION_QUEUE_AND_SETTINGS"); return true;
+    }
+    uploadRequested = queue.pending() != 0;
+    ++settings.revision;
+    Serial.println(uploadRequested ? "@TEST,UPLOAD_REQUESTED" : "@TEST,UPLOAD_COMPLETE");
+  } else Serial.println("@TEST,ERROR,UNKNOWN_COMMAND");
+  return true;
+}
+inline void testTick(uint32_t now, bool buttonDown) {
+  if (!mutex) return;
+  Guard lock;
+  const bool wasRecording = quick::session.data().phase == quick::RECORDING;
+  quick::session.tick(now);
+  if (quick::button.update(now, buttonDown) && quick::session.data().phase == quick::RECORDING)
+    quick::session.stop(now);
+  if (wasRecording && quick::session.data().phase != quick::RECORDING)
+    Serial.printf("@TEST,%s,saved=%lu\n", quick::phaseName(quick::session.data().phase),
+      (unsigned long)quick::session.data().saved);
+}
+inline void testOledLine(char *line, size_t capacity) {
+  Guard lock;
+  const quick::Metadata &test = quick::session.data();
+  if (!queue.ready() || !quick::session.ready()) snprintf(line, capacity, "TEST STORAGE ERROR");
+  else if (test.phase == quick::RECORDING) {
+    const uint32_t elapsed = quick::session.elapsed(millis());
+    const uint32_t left = elapsed < test.durationMs ? (test.durationMs - elapsed + 999) / 1000 : 0;
+    snprintf(line, capacity, "REC %02lu:%02lu %lu", (unsigned long)(left / 60),
+      (unsigned long)(left % 60), (unsigned long)test.saved);
+  } else if (uploadRequested || uploadBusy) {
+    const char *label = "UPLOAD";
+    if (!strcmp(state.message, "WIFI OFFLINE")) label = "WIFI OFFLINE";
+    else if (!strcmp(state.message, "WAITING FOR CLOCK")) label = "WAIT CLOCK";
+    else if (strcmp(state.message, "UPLOADING") && strcmp(state.message, "UPLOAD ACKNOWLEDGED") &&
+             strcmp(state.message, "WAITING FOR TEST UPLOAD")) label = "UPLOAD ERROR";
+    snprintf(line, capacity, "%s %lu", label, (unsigned long)queue.pending());
+  }
+  else snprintf(line, capacity, "%s %lu", quick::phaseName(test.phase), (unsigned long)test.saved);
 }
 inline void announce() {
   if (!mutex) return;

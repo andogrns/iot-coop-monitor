@@ -11,9 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ESP32-C3 SuperMini: MQ-135, AHT20/BMP280, OLED, and Wi-Fi cloud logging.
+// ESP32-C3 SuperMini: MQ-135, AHT20/BMP280, OLED, and offline quick-test logging.
 // MQ-135 AO must pass through the 10 kOhm / 10 kOhm divider before GPIO3.
 constexpr int MQ_ANALOG_PIN = 3;
+constexpr int TEST_STOP_BUTTON_PIN = 9; // Existing BOOT button, active low; no added wiring.
 constexpr int I2C_SDA_PIN = 4;
 constexpr int I2C_SCL_PIN = 5;
 constexpr uint8_t AHT20_ADDRESS = 0x38;
@@ -29,7 +30,6 @@ constexpr uint16_t ADC_WARNING_MV = 2400;
 constexpr char SENSOR_ID[] = "mq135-01";  // Keep this with the same physical MQ module.
 
 constexpr uint32_t SAMPLE_INTERVAL_MS = 2000;
-constexpr uint32_t LOG_INTERVAL_MS = 30000;
 constexpr char LOG_HEADER[] =
     "Record reason,Sample number,Uptime (s),MQ raw ADC,MQ ADC (mV),"
     "MQ output (V),MQ baseline ratio,AHT temperature (C),Humidity (%RH),"
@@ -59,7 +59,6 @@ uint32_t lastSampleMs = 0;
 uint32_t sampleNumber = 0;
 uint8_t warningStreak = 0;
 bool hasLogged = false;
-uint32_t lastLogMs = 0;
 char lastLoggedStatus[160] = "";
 
 struct Calibration {
@@ -85,6 +84,7 @@ struct StoredCalibration {
   float temperatureC;
   float humidityPercent;
 };
+static_assert(sizeof(StoredCalibration) == 32, "Calibration storage size changed");
 
 enum class CalState { IDLE, STABILIZING, COLLECTING };
 CalState calState = CalState::IDLE;
@@ -339,14 +339,8 @@ void showOnOled(const Reading &reading, const char *status) {
   display.setCursor(0, 56);
   if (strstr(status, "GAS_WARNING")) display.print("GAS WARNING");
   else if (strstr(status, "MQ_ADC_HIGH")) display.print("MQ ADC HIGH");
-  else if (!cloud::snapshot().queueReady) display.print("FLASH QUEUE ERROR");
   else if ((sampleNumber & 1) == 0) {
-    const cloud::State net = cloud::snapshot();
-    display.print(net.wifi ? "NET " : "OFFLINE ");
-    display.print(net.pending);
-    if (net.dropped) display.print(" DROP");
-    else if (strcmp(net.message, "CLOUD READY") && strcmp(net.message, "UPLOADING"))
-      display.print(" ERR");
+    char line[32]; cloud::testOledLine(line, sizeof(line)); display.print(line);
   }
   else if (strstr(status, "CAL_STABILIZING")) display.print("CAL STABILIZING");
   else if (strstr(status, "CAL_COLLECTING")) display.print("CAL COLLECTING");
@@ -509,8 +503,11 @@ bool formatLogRow(char *output, size_t capacity, const Reading &reading,
 void logReading(const Reading &reading, const char *status, uint32_t now,
                 uint32_t uptime) {
   (void)uptime;
+  if (!cloud::mutex) return;
+  cloud::Guard lock;
+  quick::session.tick(now);
+  if (!quick::session.due(now)) return;
   const bool changed = hasLogged && strcmp(status, lastLoggedStatus) != 0;
-  if (hasLogged && !changed && now - lastLogMs < LOG_INTERVAL_MS) return;
   coop::Record record{};
   memcpy(record.boot, cloud::bootId, sizeof(record.boot));
   record.sample = sampleNumber;
@@ -531,15 +528,15 @@ void logReading(const Reading &reading, const char *status, uint32_t now,
     "AHT_ERROR", "BMP_ERROR", "OLED_ERROR", "MQ_ADC_HIGH", "GAS_WARNING"};
   for (unsigned bit = 0; bit < 9; ++bit) if (strstr(status, flags[bit]))
     record.status |= 1 << bit;
-  bool saved = false;
-  if (cloud::mutex) {
-    cloud::Guard lock;
-    saved = cloud::queue.push(record);
-    cloud::refreshQueueState();
+  quick::encode(record, quick::session.data(), quick::session.elapsed(now));
+  const bool saved = cloud::queue.push(record, false);
+  cloud::refreshQueueState();
+  if (!saved) {
+    quick::session.storageError(now);
+    Serial.println("@TEST,ERROR,READING_NOT_SAVED_SESSION_STOPPED"); return;
   }
-  if (!saved) { Serial.println("@QUEUE,ERROR,READING_NOT_SAVED"); return; }
+  quick::session.committed(now);
   hasLogged = true;
-  lastLogMs = now;
   snprintf(lastLoggedStatus, sizeof(lastLoggedStatus), "%s", status);
 }
 
@@ -650,6 +647,12 @@ void importCalibration(char *fieldsText) {
 }
 
 void handleCommand(char *command) {
+  const quick::CalibrationSnapshot snapshot{calibration.baselineMv, calibration.thresholdMv,
+    calibration.sdMv, calibration.samples, calibration.temperatureC, calibration.humidityPercent};
+  if (cloud::testCommand(command, snapshot, calibration.valid && calState == CalState::IDLE)) return;
+  if ((!strcmp(command, "CAL START") || !strncmp(command, "CAL IMPORT,", 11)) && cloud::calibrationLocked()) {
+    Serial.println("@CAL,ERROR,TEST_ARMED_OR_RECORDING"); return;
+  }
   if (strcmp(command, "CAL START") == 0) startCalibration();
   else if (strcmp(command, "CAL CANCEL") == 0) {
     calState = CalState::IDLE;
@@ -660,7 +663,7 @@ void handleCommand(char *command) {
   else if (strncmp(command, "CAL IMPORT,", 11) == 0) importCalibration(command + 11);
   else if (cloud::command(command)) {}
   else if (strcmp(command, "HELP") == 0) {
-    Serial.println("Commands: CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <url>, CLOUD TOKEN <64 hex>, NET STATUS, NET RECONNECT, QUEUE STATUS, QUEUE INIT EMPTY, HELP");
+    Serial.println("Commands: TEST ARM 15, TEST ARM 30, TEST STATUS, TEST STOP, TEST UPLOAD, TEST UPLOAD CANCEL, CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <url>, CLOUD TOKEN <64 hex>, NET STATUS, NET RECONNECT, QUEUE STATUS, QUEUE INIT EMPTY, HELP");
   } else if (command[0]) Serial.println("@CAL,ERROR,UNKNOWN_COMMAND");
 }
 
@@ -686,7 +689,7 @@ void readSerialCommands() {
 void setup() {
   Serial.begin(115200);
   delay(1200);
-  Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + WiFi Cloud monitor");
+  Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + QuickTest monitor");
   Serial.println("MQ output is relative gas response, not ammonia ppm.");
   Serial.println("New MQ-135 modules need more than 48 hours of initial conditioning.");
   Serial.println("Type HELP with Newline selected in Serial Monitor.");
@@ -703,11 +706,20 @@ void setup() {
   bmpReady = beginBmp280();
   if (bmpReady) Serial.printf("BMP280: connected at 0x%02X\n", bmpAddress);
   else Serial.println("BMP280: not detected (0x76/0x77)");
+  pinMode(TEST_STOP_BUTTON_PIN, INPUT_PULLUP);
   cloud::begin();
   loadCalibration();
   exportCalibration();
   startedMs = millis();
   cloud::monitoringStartedUs = esp_timer_get_time();
+  if (cloud::mutex) {
+    cloud::Guard lock;
+    if (!quick::recover(cloud::storage, cloud::queue)) Serial.println("@TEST,ERROR,RECOVERY_OR_STORAGE");
+    else if (quick::session.data().phase == quick::ARMED) {
+      if (calibration.valid && quick::session.start(millis())) Serial.println("@TEST,RECORDING");
+      else Serial.println("@TEST,ERROR,START_NEEDS_VALID_CALIBRATION");
+    }
+  }
   takeReading();
   lastSampleMs = millis();
 }
@@ -716,6 +728,7 @@ void loop() {
   readSerialCommands();
   cloud::announce();
   const uint32_t now = millis();
+  cloud::testTick(now, digitalRead(TEST_STOP_BUTTON_PIN) == LOW);
   if (now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
     lastSampleMs = now;
     takeReading();

@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 // Host stand-in for the Arduino FS API. Tests execute the real FlashStorage
 // adapter, but do not emulate LittleFS internals or physical flash guarantees.
 #include <map>
@@ -9,9 +10,11 @@
 #include <cstdlib>
 #include <algorithm>
 #include <memory>
+#include <set>
 struct HostFs {
   std::map<std::string, std::vector<uint8_t>> files;
   bool mountable = true, directory = true, failRename = false;
+  std::set<std::string> directories;
   unsigned formats = 0;
 };
 class File {
@@ -67,17 +70,18 @@ class FakeLittleFS {
     return state.mountable;
   }
   bool exists(const char *path) {
-    return std::string(path) == "/queue" ? state.directory : state.files.count(path);
+    return std::string(path) == "/queue" ? state.directory : state.directories.count(path) || state.files.count(path);
   }
-  bool mkdir(const char *) { state.directory = true; return true; }
+  bool mkdir(const char *path) { if (std::string(path) == "/queue") state.directory = true; else state.directories.insert(path); return true; }
   bool format() {
-    ++state.formats; state.files.clear(); state.directory = false;
+    ++state.formats; state.files.clear(); state.directories.clear(); state.directory = false;
     state.mountable = true; return true;
   }
   File open(const char *path, const char *mode) {
     if (!state.mountable) return {};
     if (std::string(path) == "/queue")
       return state.directory ? File(&state, path, true) : File{};
+    if (state.directories.count(path)) return File(&state, path, true);
     if (std::string(mode) == "w") state.files[path].clear();
     else if (std::string(mode) == "a") state.files[path];
     else if (!state.files.count(path)) return {};

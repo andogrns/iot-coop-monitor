@@ -106,8 +106,9 @@ class Queue {
     if (!storage_.prune(meta_.consumedThrough)) return fail();
     return true;
   }
-  bool push(Record r) {
+  bool push(Record r, bool discardOnFull = true) {
     if (!ready_) return false;
+    if (pending_ == QUEUE_CAPACITY && !discardOnFull) return false;
     if (pending_ == QUEUE_CAPACITY && !discardOldest()) return false;
     r.magic = RECORD_MAGIC;
     r.version = 1;

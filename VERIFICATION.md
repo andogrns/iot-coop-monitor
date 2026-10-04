@@ -1,6 +1,65 @@
 # Wi-Fi cloud verification — 2026-10-02
 
-## Implemented and verified locally
+## Quick-test branch: 4 October 2026
+
+- `codex/quicktest` was created from `codex/wifi-cloud` commit `60356cd`.
+  `main` and `codex/wifi-cloud` remain separate; unrelated test sketches/files
+  were left untouched.
+- Firmware adds next-boot arming for 15/30 minutes, two-second local recording,
+  BOOT hold/Serial early stop, manual upload, closed-session restart protection,
+  calibration snapshots and isolated `/quicktest` storage. No field records are
+  discarded on overflow; it stops and reports Storage error.
+- Physical **read-only** COM5 probe identified ESP32-C3 revision v0.4, embedded
+  **4 MB XMC flash**, manufacturer 0x46 / device 0x4016. `CAL EXPORT` returned
+  `@CAL,MISSING,mq135-01`; calibration must be completed before arming. No new
+  firmware was uploaded, flash erased, or calibration written by these probes.
+- Record size is 128 bytes; compiled host session/adapter tests measured
+  **450 records / 57,600 bytes** for 15 minutes and **900 / 115,200 bytes** for
+  30 minutes. Two calibration profiles occupy 64 payload bytes; two session
+  checkpoints occupy 256 payload bytes, including calibration snapshots.
+  The partition table allocates 1,966,080 bytes LittleFS and 20,480 bytes NVS.
+  Physical filesystem/NVS overhead is additional; arming checks actual free
+  LittleFS space (131,200/188,800 bytes minimum) and successful NVS persistence.
+- Final ESP32-C3 Arduino compilation (core 3.3.11, USB CDC, supplied no-OTA
+  partitions, erase-all off) passed: **1,288,133 / 2,097,152 application bytes
+  (61%)**, **39,836 static RAM bytes**, 287,844 bytes remaining before runtime
+  allocations/task stacks. The build did not upload the device.
+- Session tests passed for calibration snapshot persistence, arm-on-next-boot,
+  closed-session reboot, early stop, BOOT release/hold timing, millis rollover,
+  interrupted-session recovery, checkpoint CRC/write faults, acknowledged
+  prefixes, full-queue refusal and preservation of legacy cloud queue files.
+  Existing queue faults, real adapter with a host filesystem stand-in, and
+  reading formatter regressions passed. These are simulations, not physical
+  LittleFS power-cut tests or measured sensor timing.
+- Apps Script source v1/v2 passed mock tests for authentication, field and
+  calibration validation, typed values, unknown/NTP time, separate tabs,
+  locks, duplicate retries and server failure after committed writes.
+- Private `QuickTests` tab has 29 verified headings, frozen header, typed
+  date/numeric formats, filter and calibration/time notes; Jakarta timezone
+  retained. Drive metadata confirms owner-only permissions, `shared: false`.
+- Apps Script editor readback matched local `Code.gs`. The existing deployment
+  was updated to **version 2**, retaining URL, token, execute-as-owner and
+  Anyone access. API v1 still writes to `Readings`; v2 writes to `QuickTests`.
+- Live certificate-validated v2 test rejected a wrong token and acknowledged
+  the same two synthetic IDs twice. Independent `QuickTests!A1:AC5` readback
+  found exactly two rows for boot `4e1bbaff999241b6b4e8701d8e47bdd2`, with session
+  `65c66e3aca064ad29387f74b50f62f48`, elapsed 0/2 seconds, outcome Stopped,
+  duration 30, and numeric calibration 1000/1150/12 mV, 150 samples, 29 C, 65 %RH.
+  Unknown sample time remained blank and server receipt time was separate.
+  Original API v1 live retry/authentication test also passed, with two independently
+  read-back rows for boot `e98204fd780a4b679afe23f7f3800f1e` in `Readings`.
+  These four synthetic rows were cleared after verification, preserving formats.
+  Final readback of both tabs contains only their headers; the ready QuickTests
+  layout was inspected in the browser and captured in ignored outputs.
+
+**Still requires the flashed device:** actual queue mount/free-space readback,
+calibration and power-cycle persistence, BOOT early stop, timer/sensor timing,
+physical interrupted-write recovery and real device HTTPS/Sheet ingestion.
+Flash-chip capacity identification and host/server tests do not prove these.
+Follow the [field rehearsal and eight-step guide](firmware/coop_monitor/README.md)
+before unattended use. The following results describe the earlier cloud branch.
+
+## Earlier Wi-Fi cloud implementation: 2 October 2026
 
 - Branch `codex/wifi-cloud` was created from `main`. Only the integrated monitor,
   its cloud support/setup/tests, root README and ignore rules were changed.

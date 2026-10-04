@@ -4,7 +4,8 @@ The private spreadsheet is [Coop Monitor — WiFi Cloud](https://docs.google.com
 The Apps Script project is [Coop Monitor — WiFi Cloud Upload](https://script.google.com/home/projects/1Tku2mbG-vDyCZpq0wCFpFHTmzkCRAC4CKpWX9oWROuEYx_Z13t4qePw4/edit).
 
 `Code.gs` and `appsscript.json` are the source of the ingestion API. The
-spreadsheet has one `Readings` tab, 19 columns, numeric measurements with units
+spreadsheet has `Readings` (API v1, 19 columns) and `QuickTests` (API v2,
+29 columns), numeric measurements with units
 in headings, and the `Asia/Jakarta` display timezone. `NA` means an unavailable
 measurement. An unknown sample time remains blank; receipt time is a separate
 server timestamp and never replaces sample time.
@@ -26,7 +27,7 @@ server timestamp and never replaces sample time.
    README. No Windows background service is installed.
 
 The created project already has the source, manifest, and Script Properties
-installed. Version 1 is deployed and the ignored local config contains its
+installed. Version 2 is deployed at the existing URL and the ignored local config contains its
 verified `/exec` URL and device token. Live authentication and duplicate retry
 tests passed, with independent Sheet readback. See [verification results](../../VERIFICATION.md)
 for the completed checks and pending hardware tests.
@@ -63,3 +64,29 @@ uses certificate-validated HTTPS and retrieves Google redirects with GET without
 forwarding the token. Read the IDs back from the Sheet and verify exactly two
 rows exist, with `test-000000000000` as their device ID; these are test data, not
 sensor measurements. The helper fails if no real endpoint URL is configured.
+
+## API v2: quick-test sessions
+
+`codex/quicktest` sends all v1 record fields plus `elapsed_test_s`. Its request is
+`{version:2, token, session, records}`. `session` has `id` (32 lowercase hex
+digits), `duration_min` (15 or 30), `outcome` (Completed, Stopped, Interrupted or
+Storage error), and `calibration` with numeric `baseline_mv`, `threshold_mv`,
+`sd_mv`, `samples`, and `temperature_c`, `humidity_pct` (numbers or null).
+Elapsed seconds must be nonnegative and below the planned duration.
+
+The accepted calibration snapshot is frozen at arming; it is not a command to
+restore/change calibration remotely. `QuickTests` uses exact `QUICK_HEADERS`
+from `Code.gs`: the 19 original columns, then session ID, elapsed time, planned
+duration, outcome and six calibration columns. Header mismatches reject writes.
+Authentication, 1–20 batch size, acknowledgement and locked deduplication remain
+the same. API v1 continues writing only to `Readings`.
+
+For a fresh installation create both tabs, copy `HEADERS`/`QUICK_HEADERS` into
+row 1, freeze that row, and format B:C as dates, measurement columns as numbers,
+IDs as text. Set the spreadsheet timezone to Asia/Jakarta. To update this
+existing endpoint while keeping the URL, choose **Deploy > Manage deployments >
+Edit > New version**. Retain its permissions and Script Properties.
+
+Run `test_live_endpoint.ps1 -QuickTest` for synthetic v2 tests and independently
+read the returned IDs from `QuickTests`. Both v1 and v2 live tests passed on
+4 October 2026; real ESP32 upload/recovery/button operation still needs testing.
