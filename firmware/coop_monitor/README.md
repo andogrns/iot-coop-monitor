@@ -67,12 +67,14 @@ and read actual sensor rows from Sheets. Compile/server tests do not replace thi
    Serial Monitor, run the helper below, then reopen Serial Monitor:
 
    ```powershell
-   .\firmware\coop_monitor\configure_network.ps1 -Port COM5
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\firmware\coop_monitor\configure_network.ps1" -Port COM5
    ```
 
    It prompts for the hotspot password securely, reads endpoint/token from
    ignored `cloud.local.json`, then releases COM5. Settings persist; configuring
    them does not connect or upload. `NET STATUS` should show configured settings.
+   This invocation permits scripts only in the helper process; it does not
+   change the saved Windows execution policy.
 7. **Upload:** send `TEST UPLOAD`. Keep USB/hotspot on until `pending=0` and
    `UPLOAD COMPLETE`. A full 900-record session uses 45 batches; allow several
    minutes. Wrong credentials/internet/HTTPS failures retain records and retry

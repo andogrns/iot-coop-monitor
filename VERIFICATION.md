@@ -2,6 +2,15 @@
 
 ## Quick-test branch: 4 October 2026
 
+- Windows PowerShell 5.1 helper fix: default configuration paths are resolved
+  in the script body instead of parameter defaults. The reported empty
+  `PSScriptRoot`/`Join-Path` failure was reproduced before the change. Startup
+  afterward reached the Wi-Fi prompt using the default config from both the
+  project folder and a different working directory; explicit missing-config
+  handling also passed. These checks used noninteractive mode and an invalid
+  test port, so they did not open COM5 or write device settings. The live
+  endpoint helper's matching default-path issue was corrected too.
+
 - `codex/quicktest` was created from `codex/wifi-cloud` commit `60356cd`.
   `main` and `codex/wifi-cloud` remain separate; unrelated test sketches/files
   were left untouched.

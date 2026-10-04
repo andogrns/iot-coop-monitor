@@ -1,6 +1,8 @@
 param([Parameter(Mandatory)][string]$Port,
-      [string]$ConfigPath = (Join-Path $PSScriptRoot 'cloud.local.json'))
+      [string]$ConfigPath)
 $ErrorActionPreference = 'Stop'
+# PSScriptRoot can be empty during parameter-default binding in Windows PowerShell 5.1.
+if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot 'cloud.local.json' }
 if (!(Test-Path -LiteralPath $ConfigPath)) { throw 'Missing cloud.local.json. Follow the cloud setup README.' }
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 if (!$config.endpoint_url -or $config.device_token -notmatch '^[0-9a-f]{64}$') {

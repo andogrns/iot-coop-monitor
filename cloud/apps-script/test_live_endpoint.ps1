@@ -1,6 +1,7 @@
-param([string]$ConfigPath = (Join-Path $PSScriptRoot '..\..\firmware\coop_monitor\cloud.local.json'),
+param([string]$ConfigPath,
       [switch]$QuickTest)
 $ErrorActionPreference = 'Stop'
+if (!$ConfigPath) { $ConfigPath = Join-Path $PSScriptRoot '..\..\firmware\coop_monitor\cloud.local.json' }
 $config = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json
 if ($config.endpoint_url -notmatch '^https://script\.google\.com/macros/s/[A-Za-z0-9_-]+/exec$' -or
     $config.device_token -notmatch '^[0-9a-f]{64}$') { throw 'A real deployed /exec URL and device token are required in the ignored config.' }
