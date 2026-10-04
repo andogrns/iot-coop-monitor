@@ -2,6 +2,15 @@
 
 ## Quick-test branch: 4 October 2026
 
+- User-provided device Serial output after explicit `QUEUE INIT EMPTY` reports
+  `@QUEUE,INITIALIZED`, `queue=ready`, `metadata=ready`, 4,194,304 chip bytes,
+  1,966,080 filesystem bytes with 24,576 used (1,941,504 free), and 552 NVS free
+  entries. This confirms physical filesystem provisioning and an empty session
+  checkpoint on the installed device. Calibration and network settings remain
+  missing in that output; record persistence and physical uploads are not yet
+  established. Successful initialization now clears the stale startup
+  `FLASH QUEUE ERROR` status text.
+
 - Windows PowerShell 5.1 helper fix: default configuration paths are resolved
   in the script body instead of parameter defaults. The reported empty
   `PSScriptRoot`/`Join-Path` failure was reproduced before the change. Startup
@@ -30,7 +39,7 @@
   Physical filesystem/NVS overhead is additional; arming checks actual free
   LittleFS space (131,200/188,800 bytes minimum) and successful NVS persistence.
 - Final ESP32-C3 Arduino compilation (core 3.3.11, USB CDC, supplied no-OTA
-  partitions, erase-all off) passed: **1,288,133 / 2,097,152 application bytes
+  partitions, erase-all off) passed: **1,288,179 / 2,097,152 application bytes
   (61%)**, **39,836 static RAM bytes**, 287,844 bytes remaining before runtime
   allocations/task stacks. The build did not upload the device.
 - Session tests passed for calibration snapshot persistence, arm-on-next-boot,
@@ -61,8 +70,8 @@
   Final readback of both tabs contains only their headers; the ready QuickTests
   layout was inspected in the browser and captured in ignored outputs.
 
-**Still requires the flashed device:** actual queue mount/free-space readback,
-calibration and power-cycle persistence, BOOT early stop, timer/sensor timing,
+**Still requires the flashed device:** calibration and power-cycle persistence,
+BOOT early stop, timer/sensor timing,
 physical interrupted-write recovery and real device HTTPS/Sheet ingestion.
 Flash-chip capacity identification and host/server tests do not prove these.
 Follow the [field rehearsal and eight-step guide](firmware/coop_monitor/README.md)

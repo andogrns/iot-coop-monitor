@@ -347,6 +347,8 @@ inline bool command(const char *text) {
     }
     const bool ok = storage.initializeEmpty() && queue.recover() && quick::recover(storage, queue);
     refreshQueueState();
+    snprintf(state.message, sizeof(state.message), "%s",
+      ok ? "WAITING FOR TEST UPLOAD" : "TEST STORAGE ERROR");
     Serial.println(ok ? "@QUEUE,INITIALIZED" : "@QUEUE,ERROR,INIT_FAILED");
     return true;
   }
