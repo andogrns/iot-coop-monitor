@@ -1,181 +1,128 @@
-# Offline quick test, then Google Sheets upload
+# ESP32-C3 monitor with Cloudflare
 
-**`codex/quicktest`** records every two seconds for 15 or 30 minutes. It is based
-on `codex/wifi-cloud`; Wi-Fi stays off until `TEST UPLOAD`. `main` retains SD
-logging and `codex/wifi-cloud` retains continuous cloud logging. Upload this
-branch's **`coop_monitor.ino`**, with its headers and `partitions.csv`.
+Updated 10 October 2026. This is the active `main` implementation. It continuously reads MQ-135, AHT20/BMP280 and OLED, and exchanges readings, settings, logs and command results with the deployed private dashboard.
 
-MQ-135 readings are relative gas response, not validated ammonia ppm. Calibration,
-warning thresholds, OLED measurements and readable Serial output are preserved.
-No computer or network is needed at the site.
+The source compiles for the ESP32-C3 SuperMini. This update has **not** been flashed to the physical device. Follow the USB cutover below before expecting real readings in Cloudflare. A Git branch change does not change installed firmware.
 
-## Before the trip
+MQ-135 values are relative gas response, not validated ammonia ppm. Default sensing is every **2 seconds**, with a **10-minute cold-boot warm-up**. Calibration, warm-up, invalid sensors and ADC-high status suppress gas warnings even with a manual threshold.
 
-Close Serial Monitor and any logger: only one process may own COM5. Build/upload:
+## Hardware
+
+Use the ESP32-C3 SuperMini, MQ-135 module, two 10 kOhm divider resistors, AHT20/BMP280 combined module and SSD1306 128x64 I2C OLED. See the [pin table and wiring diagram](WIRING.md).
+
+- MQ heater: stable 5 V / VBUS; all grounds shared.
+- MQ AO: 10 kOhm to GPIO3; another 10 kOhm from GPIO3 to GND. Never connect a possible 5 V AO directly to the ESP32.
+- I2C: GPIO4 SDA, GPIO5 SCL; combo module and OLED powered from 3V3.
+- MicroSD is unused. Remove only the SD adapter connections if it remains attached.
+- BOOT/GPIO9 has its normal bootloader role. It no longer stops a field session. Holding it during reset can enter download mode.
+
+## Build without uploading
+
+Install Arduino IDE, **ESP32 by Espressif Systems**, Adafruit AHTX0, BMP280, SSD1306, GFX, BusIO and Unified Sensor. `Wire`, `Preferences`, Wi-Fi, TLS, HTTP and cJSON come with the ESP32 core. The checked build used core **3.3.11**.
+
+From the repository root in PowerShell:
 
 ```powershell
-.\firmware\coop_monitor\upload_wifi_cloud.ps1 -Port COM5
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\firmware\coop_monitor\build_wifi_cloud.ps1"
 ```
 
-The helper identifies a 4 MB ESP32-C3, backs up `CAL EXPORT` to ignored
-`outputs/wifi-cloud/backups`, and uploads with erase-all disabled. A missing
-calibration export means no accepted profile existed. A Git branch change does
-not change the device's installed firmware.
+The helper finds Arduino IDE's CLI by default; use `-ArduinoCli 'C:\path\to\arduino-cli.exe'` if needed. It writes ignored `outputs/cloudflare/build`. This invocation changes execution policy only for that process.
 
-Arduino IDE: ESP32-C3 Super Mini, USB CDC enabled, 4 MB, no OTA, erase-all off.
-Keep the supplied custom partition table with the sketch. Install the ESP32
-core and Adafruit AHTX0, BMP280, SSD1306, GFX, BusIO and Unified Sensor libraries.
-Serial Monitor: **115200 baud, Newline**. Check `CAL SHOW`, `QUEUE STATUS` and
-`TEST STATUS`. Only for a **known empty/new filesystem**, send `QUEUE INIT EMPTY`
-once if LittleFS is unprovisioned. This can erase an unmountable volume; never
-use it to repair a volume containing readings. No error automatically formats.
+Board: `esp32:esp32:nologo_esp32c3_super_mini`, USB CDC on boot, 4 MB flash, no OTA, erase-all **off**. Keep every active header and the supplied `partitions.csv` with `coop_monitor.ino`. The 2 MiB application partition and NVS/filesystem offsets match the prior build. The Cloudflare runtime neither mounts nor formats LittleFS; old filesystem bytes are retained.
 
-Rehearse before relying on the field session: calibrate, arm, power-cycle, record
-briefly, hold BOOT to stop, power-cycle again, check saved/pending counts, upload,
-and read actual sensor rows from Sheets. Compile/server tests do not replace this.
+## USB cutover
 
-## Tomorrow's eight steps (5 October 2026)
+1. With the **old firmware still installed**, export calibration with `CAL EXPORT`. If using QuickTest, stop/disarm any active session and upload/export its pending readings using that branch's guide. For the older continuous uploader, let its pending queue finish. Keep the corresponding firmware source and a copy of any historical data needed for rollback.
+2. Close Serial Monitor and any capture process. Only one process may own the COM port. Replace `COM5` below with the device's actual port.
 
-1. **Campus:** power by USB, open Serial Monitor, and check live readings and
-   `TEST STATUS`. Upload any previous pending session before arming another.
-   `TEST STOP` disarms an old armed session if you need to recalibrate.
-2. **Calibrate:** put the MQ-135 in representative clean air, away from exhaust
-   and cleaning vapours. Send `CAL START`; allow **10 minutes stabilization +
-   5 minutes collection**. Wait for `@CAL,SAVED`, run `CAL SHOW` / `CAL EXPORT`,
-   and save the complete `@CAL,DATA,...` line on the computer. Do not proceed
-   on missing/failed calibration. Failed/cancelled runs preserve the old profile.
-   A new MQ-135 needs more than 48 hours initial conditioning; this short
-   procedure cannot replace conditioning.
-3. **Arm and travel:** send `TEST ARM 30` (or `TEST ARM 15` for a fixed 15-minute
-   limit), then `TEST STATUS`. Confirm **Armed**, correct duration,
-   `metadata=ready`, `pending=0`. Power off and travel. The accepted calibration
-   is frozen with this session; recording starts only on the **next boot**.
-   Avoid another reboot during travel.
-4. **Site:** power from USB/power bank, confirm OLED `REC` countdown and rising
-   saved count, then leave it 15–30 minutes. To end early, **hold BOOT for at
-   least two seconds while running**, then release. `TEST STOP` does the same
-   over Serial. Use BOOT, not RST; do not hold BOOT at power-on/reset because
-   GPIO9 low selects the ESP32-C3 downloader. Recording stops automatically at
-   the selected limit; later monitoring does not add field records.
-5. **Retrieve:** if returning early, stop with BOOT before unplugging. The OLED
-   shows Stopped/Completed and saved count when no priority gas/ADC warning is
-   displayed. You may power off for travel. Unexpected power loss recovers the
-   committed samples as **Interrupted**, and never resumes recording automatically.
-6. **Campus hotspot:** enable internet and **2.4 GHz** compatibility on the phone.
-   Power by USB; run `CAL SHOW` and `TEST STATUS`. Completed/stopped/interrupted
-   sessions remain closed on reboot. If network settings are needed, close
-   Serial Monitor, run the helper below, then reopen Serial Monitor:
+   ```powershell
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\firmware\coop_monitor\upload_wifi_cloud.ps1" -Port COM5
+   ```
+
+   The helper compiles, identifies a **4 MB ESP32-C3**, queries calibration and legacy session/network status, then saves a calibration export and complete 4 MB flash dump with SHA-256 in ignored `outputs/cloudflare/backups`. It stops before upload if calibration cannot be read, the backup fails, a session is Armed/Recording, or reported legacy readings remain pending. `-LegacyRecordsExported` permits pending legacy records only after you have independently preserved them; it never bypasses an active session. The new firmware cannot upload legacy flash records.
+
+   The upload keeps erase-all disabled. Full flash backups can contain credentials; keep them private. A backup file and hash do not establish physical restore success.
+3. Open Serial Monitor at **115200 baud, Newline**. Check `CAL SHOW`, `CONFIG SHOW`, `NET STATUS` and the sensor readings. Compare calibration with the pre-upload export. Do not initialize/format the old filesystem.
+4. Close Serial Monitor, then provision Wi-Fi and the Cloudflare device credential:
 
    ```powershell
    powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\firmware\coop_monitor\configure_network.ps1" -Port COM5
    ```
 
-   It prompts for the hotspot password securely, reads endpoint/token from
-   ignored `cloud.local.json`, then releases COM5. Settings persist; configuring
-   them does not connect or upload. `NET STATUS` should show configured settings.
-   This invocation permits scripts only in the helper process; it does not
-   change the saved Windows execution policy.
-7. **Upload:** send `TEST UPLOAD`. Keep USB/hotspot on until `pending=0` and
-   `UPLOAD COMPLETE`. A full 900-record session uses 45 batches; allow several
-   minutes. Wrong credentials/internet/HTTPS failures retain records and retry
-   with increasing delays. `TEST UPLOAD CANCEL` cancels future attempts; an
-   in-flight batch may finish. `TEST UPLOAD` resumes remaining records.
-8. **Review:** open the private [QuickTests tab](https://docs.google.com/spreadsheets/d/1Pv_26gZrTQ3hHmFqBW2cFxugm8JXZ5-FyX_x4JqN9ro/edit#gid=1663671244).
-   Filter by Session ID. Review elapsed test time, raw MQ response, baseline
-   ratio, temperature, humidity, status and calibration columns. The first
-   **10 minutes after cold boot** remain Warming up: readings are retained,
-   gas warnings are gated. A 15-minute run has roughly five minutes after warm-up.
+   The helper reads ignored `dashboard.local.json`, prompts for a **2.4 GHz** Wi-Fi SSID and password, saves settings and requests reconnect. Passwords/tokens are not printed. It accepts open networks, 8–63 UTF-8 password bytes or a 64-character hex key. Provisioning writes to NVS; it does not flash the firmware.
+5. Reopen Serial Monitor. Expect `CLOUD CONNECTED` after Wi-Fi and NTP time synchronization. Confirm `CONFIG SHOW` reaches desired revision 1 or the dashboard's current revision. Open [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/) using the separate owner key, and confirm actual sensor readings, device uptime and firmware version `cloudflare-1.0.0`.
 
-Offline samples retain **unknown UTC**; Sampled at stays blank. Received at
-(Jakarta) is the later campus receipt time, not the site's sampling time.
-Use **Elapsed test time (s)** to review the field sequence.
+The backend has already registered **`coop-monitor-01`**. You do not need another D1 database, R2 bucket or device registration. The local provisioning file contains protocol version 1, that ID, the exact exchange endpoint and its device token. `dashboard.example.json` is a safe template for another authorized provisioning setup. Legacy `cloud.local.json` has a different format/token and is not used by the current helper.
 
-## Verified flash budget
+## Calibration and warnings
 
-Read-only `esptool flash-id` on COM5, 4 October 2026, identified an ESP32-C3 with
-**4 MB embedded XMC flash**. The supplied no-OTA layout keeps NVS at the same
-offset/size as the previous SD/cloud sketches:
+A new MQ-135 requires initial conditioning; use the established more-than-48-hour procedure before short clean-air calibration. Keep the sensor in known representative clean air away from exhaust, smoke, alcohol and cleaners. Send `CAL START` and allow **10 minutes stabilization plus 5 minutes collection**. Wait for `@CAL,SAVED`, then save `CAL EXPORT`. Failed or cancelled calibration retains the previous accepted profile.
 
-| Allocation | Bytes | Purpose |
-|---|---:|---|
-| Application | 2,097,152 | Firmware |
-| LittleFS | 1,966,080 | Queue, filesystem metadata and recovery workspace |
-| NVS | 20,480 | Calibration, settings, session checkpoints |
-| Logical queue | 524,288 | 4,096 x 128-byte records |
-| 15-minute readings | 57,600 | Up to 450 records |
-| 30-minute readings | 115,200 | Up to 900 records |
-| Calibration payload | 64 | Two existing 32-byte profiles |
-| Session checkpoint payload | 256 | Two 128-byte checkpoints, each includes calibration snapshot |
+Calibration always samples every 2 seconds during its collection workflow, temporarily overriding a slower dashboard interval. After calibration the selected interval resumes. At least 60 valid samples are required. Calibration starts only with the AHT sensor available, and warnings are suppressed during calibration.
 
-NVS entries and filesystem metadata add overhead. Arming requires a successful
-NVS checkpoint and **131,200 free filesystem bytes for 15 minutes** or **188,800
-for 30 minutes**: readings + up to 63 retired records + 64 KiB reserve. The
-runtime check refuses insufficient space. `TEST STATUS` reports actual mounted
-space and NVS free entries. Host tests measured exactly 450/900 packed records;
-physical filesystem recovery and session operation still require device tests.
+The automatic threshold is the greater of baseline + 3 standard deviations or a 15% baseline increase. Dashboard manual thresholds are **10–2399 mV at the divided ESP32 ADC**, not MQ module volts or ppm. Warning confirmation is 1–10 consecutive samples; default 3. Normal sampling is 2–60 seconds. Changing settings resets the warning streak. A manual value below baseline is logged as a warning. ADC values at or above **2400 mV** produce the ADC-high guard.
 
-Calibration is local in `coopcal`; Wi-Fi/cloud settings use `coopnet`; session
-checkpoints use `cooptest`. Calibration survives power-off. Its accepted snapshot
-also uploads with each field row, but Sheets does not automatically restore the
-device profile. Keep `CAL EXPORT` as backup. For the same sensor/pin/divider,
-replace `@CAL,DATA,` with `CAL IMPORT,` and send the remaining fields unchanged.
-Calibration changes are blocked while Armed/Recording. Calibration-period sensor
-readings are not part of the field session.
+Accepted calibration remains in the unchanged `coopcal` namespace with the existing 32-byte profile format. For the same MQ module, GPIO and divider, restore a saved `@CAL,DATA,...` line by replacing `@CAL,DATA,` with `CAL IMPORT,` and sending the remaining fields unchanged. Import is USB-only. `calibrationRevision` is a CRC32 fingerprint of the accepted profile, not an increasing counter; missing calibration uses 0. A fingerprint supports history interpretation and is not a security signature.
 
-## Storage and networking
+## Cloud behavior and data loss
 
-Only one unuploaded session is allowed; pending records block rearming. Records
-have CRC, device/boot/sequence ID, session ID, elapsed time, sensor values/status
-and UTC when known. Alternating CRC-protected NVS checkpoints recover state;
-an interrupted append preserves its committed prefix. Complete-record corruption
-or invalid checkpoints stop storage and report errors without formatting.
+- HTTPS POSTs use certificate/hostname validation, a separate device bearer token and protocol version 1. No redirects or insecure TLS fallback are enabled.
+- Cloud exchange runs in a separate task, normally every 2 seconds even when sampling is slower. HTTPS delays do not run in the sensing loop.
+- **64 readings and 16 logs** are buffered in RAM. Each exchange sends up to **12 readings, 6 logs and 5 command results**, within the backend's minute-window limits. Only matching acknowledged IDs or explicit permanent rejections remove sent records.
+- A boot gets a random ID. Sample uptime is 64-bit monotonic time; sequence IDs and payloads remain unchanged on retry. Original unknown UTC stays `null`, even after NTP becomes available. The backend provides a separately identified estimated timestamp.
+- Failures retry with backoff and jitter up to about 60 seconds. HTTP 401 blocks uploads until credentials are corrected or reconnect is requested. HTTP 400/409 shows `PROTOCOL ERROR` and requires diagnosis; repeated retries are not proof of recovery.
+- At 2-second sampling the buffer holds roughly **128 seconds**. When full, it drops oldest readings and increments the per-boot drop count. A power loss/restart discards pending RAM data and resets these counters. There is no flash measurement recovery or offline field-session recorder in this build.
+- Owner/capacity upload pauses leave local sensing and warnings running. Exchanges usually slow to 60 seconds; pending command receipts temporarily use 2 seconds so commands can acknowledge/complete. The deployed backend does not persist fresh device state/readings/logs while data writes are paused, so dashboard values can become stale. Existing stored history remains accessible where provider quotas permit.
+- Local logs aggregate status changes and command/calibration outcomes; routine sample blocks stay on USB Serial. Firmware buffers and backend hourly log limits can discard logs. The cloud console is not a copy of ROM bootloader output or every USB line.
 
-Quick-test files use `/quicktest`, preserving the cloud branch's `/queue` and
-metadata. The 4,096-record limit exceeds a 900-record session. If full unexpectedly,
-recording stops with Storage error and **preserves existing pending readings**;
-this branch does not discard oldest records. Host tests verify legacy queue isolation.
+D1 keeps recent full-resolution samples for 30 days. Older data is archived to private compressed R2 files with checksum/readback verification before deleting the matching D1 source. See [operations](../../cloud/coop-monitor-worker/OPERATIONS.md). Included-capacity guards and billing notifications do not guarantee a provider-enforced zero-cost cap.
 
-Wi-Fi/HTTPS runs in a separate task, enabled only for manual upload of a closed
-session. Oldest records upload in batches of 20, and retire only after matching
-acknowledged IDs. Failed/lost responses retry; Apps Script deduplicates under a
-lock. Certificates are validated; Google's acknowledgement redirect is followed
-only to `script.googleusercontent.com` via GET without replaying credentials.
-The Sheet stays private; the endpoint serves no stored readings. Secrets are
-masked in output and ignored by Git. No background computer service is installed.
+## Settings and remote commands
 
-## Wiring and controls
+Desired settings are validated and applied atomically in the sensing task. Only configuration changes write NVS. The firmware reports applied revision/error separately from the dashboard's saved revision; invalid or older revisions do not replace accepted settings.
 
-Remove MicroSD; existing sensor wiring is unchanged:
-
-| Pin | ESP32-C3 connection |
+| Dashboard command | Completion meaning |
 |---|---|
-| MQ-135 VCC / GND | 5 V / VBUS and GND |
-| MQ-135 AO | 10 kOhm to GPIO3; another 10 kOhm from GPIO3 to GND |
-| MQ-135 DO | Unconnected |
-| AHT20/BMP280 and OLED VCC / GND | 3V3 / GND |
-| AHT20/BMP280 and OLED SDA / SCL | GPIO4 / GPIO5 |
-| Existing BOOT button | GPIO9, active low |
+| `CAL_SHOW`, `CAL_EXPORT` | Return saved profile values to the console; also print the USB export |
+| `CAL_START` | Start only after reference conditions are confirmed; complete after a valid profile is actually saved |
+| `CAL_CANCEL` | Cancel calibration and retain the previous profile |
+| `NET_STATUS` | Report link/upload state, pending readings and drops; no credentials |
+| `NET_RECONNECT` | Retry Wi-Fi; complete when the link is re-established, which does not itself prove HTTPS ingestion |
+| `CONFIG_SHOW` | Report currently applied monitoring settings/revision |
+| `RESTART` | Reboot after the server acknowledges the running receipt; report completion on the new software-reset boot |
+| `HELP` | Return the allowed command list |
 
-Use a stable USB supply that powers the MQ heater, display and ESP32; check the
-power bank remains on throughout the run. Gas/ADC warnings keep OLED priority.
-Otherwise the status line alternates sensor status and session/countdown/upload
-progress, Wi-Fi offline, clock wait or upload error with pending count. Serial
-reports the specific upload errors.
+Command receipts use a CRC-protected 12-entry NVS journal. The firmware persists acceptance and waits for the server to acknowledge it before executing. It checks expiry before starting. In-progress commands recovered after a reboot become `uncertain` and are not replayed; a confirmed software reset can complete the recorded restart command. Results retry until acknowledged. This provides replay protection with explicit uncertainty, not universal exactly-once physical execution. Corrupt/failed journal writes block remote execution and preserve the stored evidence.
+
+Wi-Fi/device credential updates and calibration import are USB-only. No free-form shell, OTA, fan/relay action or remote factory reset is exposed.
+
+## USB commands
 
 | Command | Action |
 |---|---|
-| `TEST ARM 15` / `TEST ARM 30` | Arm next boot; accepted calibration and empty healthy queue required |
-| `TEST STATUS` | State/ID, duration, elapsed/saved/pending, flash and NVS usage |
-| `TEST STOP` | Stop recording or disarm |
-| `TEST UPLOAD` / `TEST UPLOAD CANCEL` | Start/resume or cancel manual upload |
-| `CAL START` / `CAL CANCEL` | Start/cancel clean-air calibration |
-| `CAL SHOW` / `CAL EXPORT` / `CAL IMPORT,...` | Inspect, back up or restore calibration |
-| `NET STATUS` / `QUEUE STATUS` | Masked settings, connection/errors and queue space |
-| `WIFI SSID ...` / `WIFI PASS ...` | Save hotspot settings (`WIFI OPEN` for an open network) |
-| `CLOUD URL ...` / `CLOUD TOKEN ...` | Save `/exec` URL and 64-hex token |
-| `NET RECONNECT` / `HELP` | Retry active upload connection / list commands |
+| `CAL START`, `CAL CANCEL` | Start/cancel clean-air calibration |
+| `CAL SHOW`, `CAL EXPORT`, `CAL IMPORT,...` | Inspect/back up/restore calibration |
+| `CONFIG SHOW` | Applied monitoring configuration |
+| `NET STATUS`, `NET RECONNECT` | Masked provisioning/link state; reconnect |
+| `WIFI SSID ...`, `WIFI PASS ...`, `WIFI OPEN` | Save Wi-Fi settings |
+| `CLOUD URL ...`, `CLOUD ID ...`, `CLOUD TOKEN ...` | Save the deployed endpoint, device ID and 64 lowercase hex token |
+| `HELP` | List USB commands |
 
-Run `test_wifi_cloud.ps1` for host checks and `build_wifi_cloud.ps1` to compile
-without uploading. See [verification](../../VERIFICATION.md) and
-[Apps Script setup](../../cloud/apps-script/README.md).
-[Espressif GPIO9 boot guidance](https://docs.espressif.com/projects/esptool/en/latest/esp32c3/advanced-topics/boot-mode-selection.html).
+The endpoint is restricted to `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange`. Device tokens are distinct from the dashboard owner key. `TEST ...` and `QUEUE ...` commands explicitly report that legacy storage is disabled and make no filesystem changes.
+
+## Troubleshooting and acceptance
+
+| Status | Next step |
+|---|---|
+| `SETUP NEEDED` | Run provisioning; inspect masked `NET STATUS` |
+| `WIFI OFFLINE` | Check 2.4 GHz network, SSID/password, signal and power |
+| `WAITING FOR CLOCK` | Permit NTP; TLS uploads wait for valid UTC |
+| `CHECK DEVICE TOKEN` | Use the device token from `dashboard.local.json`, then reconnect |
+| `CLOUD RETRY` | Check internet/TLS/backend availability; pending data is only in RAM |
+| `PROTOCOL ERROR` | Capture non-secret Serial status and inspect backend contract; avoid assuming retries repaired it |
+| `UPLOADS PAUSED` | Inspect owner pause/capacity in the dashboard; local sensing continues |
+| Configuration failed / commands blocked | Inspect error and preserve NVS/flash backup; do not erase calibration or command evidence as a routine repair |
+
+Physical acceptance remains: read back calibration/settings after upload and power cycle; observe real records and dashboard freshness; check warm-up/warning guards; change settings and inspect desired/applied revisions; exercise each supported command, Wi-Fi loss/reconnect, RAM overflow and owner pause; observe restart recovery; then collect a 24-hour device run and actual resource usage. Compilation and the earlier synthetic backend checks do not establish those physical results.
+
+The old `cloud_runtime.h`, flash/session headers, SD tools and `test_wifi_cloud.ps1` remain historical support. They are not the active Cloudflare runtime or evidence of its device behavior. For those workflows use `codex/wifi-cloud`, `codex/quicktest`, or the original SD commit. Optional computer Serial capture remains manually controlled and is not required for cloud operation. See [verification](../../VERIFICATION.md) and the [firmware handoff](../../cloud/coop-monitor-worker/FIRMWARE_HANDOFF.md).

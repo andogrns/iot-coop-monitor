@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "coop-monitor-worker",
+  "account_id": "7865a0c25fe350bb4395009c91eb83d1",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-08",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  },
+  "secrets": { "required": ["ADMIN_TOKEN", "SESSION_SECRET"] },
+  "vars": {
+    "RETENTION_DAYS": "30", "DB_MAX_BYTES": "500000000", "ARCHIVE_MAX_BYTES": "10000000000",
+    "D1_DAILY_WRITE_LIMIT": "100000", "WORKER_DAILY_REQUEST_LIMIT": "100000", "DASHBOARD_DAILY_REQUEST_RESERVE": "21600"
+  },
+  "assets": { "directory": "public", "binding": "ASSETS", "run_worker_first": true },
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "r2_buckets": [{ "binding": "ARCHIVES", "bucket_name": "coop-monitor-archives" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "coop-monitor-db",
+      "database_id": "ea267d2d-f237-4374-9c72-d4fd6efb632c",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

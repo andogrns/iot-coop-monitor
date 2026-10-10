@@ -1,4 +1,26 @@
-# Wi-Fi cloud verification — 2026-10-02
+# Coop Monitor verification
+
+## Cloudflare firmware source: 10 October 2026
+
+- The active monitor now uses Cloudflare protocol v1 at the deployed `/api/device/exchange` endpoint. Source was prepared on `codex/cloudflare-firmware` from `codex/quicktest` for the requested publication to `main`. Historical branch refs and the original SD commit remain available.
+- Readable Serial, sensor/OLED integration, the accepted calibration format/namespace and warning guards are preserved. Settings, logs, command receipts/recovery and a separate HTTPS task are integrated. Measurements/logs use bounded RAM, and the new runtime does not mount/format legacy flash measurement storage.
+- Final ESP32-C3 Arduino compilation passed with ESP32 core **3.3.11**, board `esp32:esp32:nologo_esp32c3_super_mini`, USB CDC enabled, no OTA, supplied `partitions.csv` and erase-all off. Application: **1,286,925 / 2,097,152 bytes (61%)**. Static globals: **67,956 / 327,680 bytes (20%)**, leaving **259,724 bytes** before task stacks, heap, JSON and TLS runtime allocations. Output: ignored `outputs/cloudflare/build`. This is compilation, not a measured runtime RAM result.
+- The live HTTPS endpoint presented an authorized Let's Encrypt YE2 chain through ISRG roots during the host inspection. Public ISRG Root X1/X2 were obtained from official Let's Encrypt URLs and checked against SHA-256 fingerprints; GTS trust roots are retained for issuer rotation. Firmware uses CA and hostname validation with no insecure fallback. This does not establish an ESP32 TLS handshake.
+- Provisioning now reads the separate ignored `dashboard.local.json`; Wi-Fi settings use secure prompts and credentials are not printed. The upload helper adds legacy pending-data checks and a full 4 MB flash backup/SHA-256 before an erase-all-off upload. Neither helper was executed against a COM port during this source update.
+- PowerShell parsing passed for the build, upload and provisioning helpers. Git index whitespace review passed. All 67 indexed files were compared locally against actual owner/device/session/legacy secret values; no matches were found. Local credential files, backups and generated builds are Git-ignored. This source review did not open a serial port or perform physical recovery.
+- No new tests were added or run for this firmware update. Earlier legacy tests below do not establish Cloudflare firmware behavior. The source build and review do not prove sensor timing, warning behavior, NVS persistence/recovery, command execution or network handling on the physical board.
+
+**Still requires the device:** deliberate USB cutover/provisioning, calibration/settings readback before and after power cycle, real sensor HTTPS ingestion, dashboard freshness, desired/applied configuration, each remote command, interrupted-command/restart recovery, Wi-Fi outage, RAM overflow, owner pause and a 24-hour observation with measured account usage. See the [current firmware guide](firmware/coop_monitor/README.md).
+
+## Cloudflare backend deployment: 10 October 2026
+
+The deployed Worker version is `46c5362c-39a0-4472-ba44-7f00fadbe996`, with D1 `coop-monitor-db`, private R2 `coop-monitor-archives` and registered device `coop-monitor-01`. The earlier backend work passed **32 live acceptance checks** using identified synthetic data, including authentication, duplicate retries, settings/commands, pause/resume, export and verified archive/retention. Its final fixture contained 900 readings in 30 minute blocks; gzip readback/checksum passed and the fixtures were cleaned up. See [backend evidence](cloud/coop-monitor-worker/VERIFICATION.md) and [deployment details](cloud/coop-monitor-worker/DEPLOYMENT.md).
+
+These were backend checks from the deployment stage, not newly run firmware tests. No backend redeployment, physical flash, calibration, real sensor ingestion or independent database restore was performed during the firmware source publication.
+
+## Historical Wi-Fi / QuickTest evidence
+
+The dated results below describe older firmware and Apps Script deployments. References to the previous `main` SD implementation and branch creation describe those dates; the current `main` source is Cloudflare. Preserve the evidence without interpreting it as current physical acceptance.
 
 ## Quick-test branch: 4 October 2026
 
@@ -74,8 +96,8 @@
 BOOT early stop, timer/sensor timing,
 physical interrupted-write recovery and real device HTTPS/Sheet ingestion.
 Flash-chip capacity identification and host/server tests do not prove these.
-Follow the [field rehearsal and eight-step guide](firmware/coop_monitor/README.md)
-before unattended use. The following results describe the earlier cloud branch.
+The field rehearsal and eight-step guide is retained on `codex/quicktest`.
+The following results describe the earlier cloud branch.
 
 ## Earlier Wi-Fi cloud implementation: 2 October 2026
 

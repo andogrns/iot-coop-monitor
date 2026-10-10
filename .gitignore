@@ -6,6 +6,17 @@
 /.codex_spreadsheet_review/
 /.codex-remote-attachments/
 /node_modules/
+/cloud/coop-monitor-worker/node_modules/
+/cloud/coop-monitor-worker/.wrangler/
+/cloud/coop-monitor-worker/.dev.vars
+/cloud/coop-monitor-worker/.env
+/cloud/coop-monitor-worker/.env.*
+/cloud/coop-monitor-worker/.dev.vars.*
+/cloud/coop-monitor-worker/.credentials.local.json
+/cloud/coop-monitor-worker/.secrets.production.json
+/cloud/coop-monitor-worker/.local/
+/cloud/coop-monitor-worker/worker-configuration.d.ts
+/firmware/coop_monitor/dashboard.local.json
 /firmware/coop_monitor/cloud.local.json
 
 # Local sensor captures and downloads

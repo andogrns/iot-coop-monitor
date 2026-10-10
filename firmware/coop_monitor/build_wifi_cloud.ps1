@@ -8,7 +8,7 @@ if (!$ArduinoCli) {
     }
 }
 if (!(Test-Path -LiteralPath $ArduinoCli)) { throw 'Arduino CLI not found. Supply -ArduinoCli with its full path.' }
-if (!$BuildDirectory) { $BuildDirectory = Join-Path $root 'outputs\wifi-cloud\build' }
+if (!$BuildDirectory) { $BuildDirectory = Join-Path $root 'outputs\cloudflare\build' }
 $null = [IO.Directory]::CreateDirectory($BuildDirectory)
 & $ArduinoCli compile --fqbn 'esp32:esp32:nologo_esp32c3_super_mini:CDCOnBoot=cdc,PartitionScheme=no_ota,EraseFlash=none' `
     --build-property 'upload.maximum_size=2097152' --build-path $BuildDirectory $PSScriptRoot

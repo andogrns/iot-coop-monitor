@@ -1,0 +1,7 @@
+{
+  "backend": "cloudflare",
+  "protocolVersion": 1,
+  "deviceId": "coop-monitor-01",
+  "endpoint": "https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange",
+  "token": "REPLACE_WITH_THE_REGISTERED_DEVICE_TOKEN"
+}

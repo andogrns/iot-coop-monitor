@@ -1,5 +1,7 @@
 # Google Sheets ingestion
 
+**Legacy backend:** this guide belongs to `codex/wifi-cloud` and `codex/quicktest`. The active `main` firmware uses [Cloudflare protocol v1](../coop-monitor-worker/README.md) and `dashboard.local.json`. The old Sheet, deployment and `cloud.local.json` remain available for historical firmware. Use this guide and its USB helpers from the corresponding historical branch; the current provisioning helper targets Cloudflare.
+
 The private spreadsheet is [Coop Monitor — WiFi Cloud](https://docs.google.com/spreadsheets/d/1Pv_26gZrTQ3hHmFqBW2cFxugm8JXZ5-FyX_x4JqN9ro/edit).
 The Apps Script project is [Coop Monitor — WiFi Cloud Upload](https://script.google.com/home/projects/1Tku2mbG-vDyCZpq0wCFpFHTmzkCRAC4CKpWX9oWROuEYx_Z13t4qePw4/edit).
 

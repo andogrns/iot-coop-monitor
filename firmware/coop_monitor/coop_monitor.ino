@@ -1,6 +1,6 @@
 #include <Arduino.h>
 #include <Wire.h>
-#include "cloud_runtime.h"
+#include "dashboard_runtime.h"
 #include <Preferences.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
@@ -11,10 +11,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-// ESP32-C3 SuperMini: MQ-135, AHT20/BMP280, OLED, and offline quick-test logging.
+struct Reading; // Arduino-generated prototypes can appear before the full sensor struct.
+
+// ESP32-C3 SuperMini: continuous sensing with the private Cloudflare backend.
 // MQ-135 AO must pass through the 10 kOhm / 10 kOhm divider before GPIO3.
 constexpr int MQ_ANALOG_PIN = 3;
-constexpr int TEST_STOP_BUTTON_PIN = 9; // Existing BOOT button, active low; no added wiring.
 constexpr int I2C_SDA_PIN = 4;
 constexpr int I2C_SCL_PIN = 5;
 constexpr uint8_t AHT20_ADDRESS = 0x38;
@@ -55,11 +56,10 @@ bool oledReady = false;
 uint8_t bmpAddress = 0;
 uint8_t oledAddress = 0;
 uint32_t startedMs = 0;
+uint64_t startedUptimeMs = 0;
 uint32_t lastSampleMs = 0;
 uint32_t sampleNumber = 0;
 uint8_t warningStreak = 0;
-bool hasLogged = false;
-char lastLoggedStatus[160] = "";
 
 struct Calibration {
   bool valid = false;
@@ -85,6 +85,21 @@ struct StoredCalibration {
   float humidityPercent;
 };
 static_assert(sizeof(StoredCalibration) == 32, "Calibration storage size changed");
+
+uint32_t calibrationRevision() {
+  if (!calibration.valid) return 0;
+  const StoredCalibration profile = {CAL_STORAGE_MAGIC, CAL_VERSION, 0,
+    calibration.baselineMv, calibration.thresholdMv, calibration.sdMv,
+    calibration.samples, calibration.temperatureC, calibration.humidityPercent};
+  const uint32_t fingerprint = dashboard::crc32(&profile, sizeof(profile));
+  return fingerprint ? fingerprint : 1;
+}
+
+float warningThreshold() {
+  if (!calibration.valid) return NAN;
+  const auto config = cloud::config();
+  return config.manual ? config.manualThresholdMv : calibration.thresholdMv;
+}
 
 enum class CalState { IDLE, STABILIZING, COLLECTING };
 CalState calState = CalState::IDLE;
@@ -277,7 +292,7 @@ Reading readSensors() {
     if (aht20.getEvent(&humidityEvent, &temperatureEvent)) {
       value.ahtTemperatureC = temperatureEvent.temperature;
       value.humidityPercent = humidityEvent.relative_humidity;
-      value.ahtValid = isfinite(value.ahtTemperatureC) &&
+      value.ahtValid = isfinite(value.ahtTemperatureC) && value.ahtTemperatureC >= -50 && value.ahtTemperatureC <= 150 &&
                        isfinite(value.humidityPercent) &&
                        value.humidityPercent >= 0.0f &&
                        value.humidityPercent <= 100.0f;
@@ -286,8 +301,8 @@ Reading readSensors() {
   if (bmpReady) {
     value.bmpTemperatureC = bmp280.readTemperature();
     value.pressureHpa = bmp280.readPressure() / 100.0f;
-    value.bmpValid = isfinite(value.bmpTemperatureC) &&
-                     isfinite(value.pressureHpa) && value.pressureHpa > 0.0f;
+    value.bmpValid = isfinite(value.bmpTemperatureC) && value.bmpTemperatureC >= -50 && value.bmpTemperatureC <= 150 &&
+                     isfinite(value.pressureHpa) && value.pressureHpa >= 100.0f && value.pressureHpa <= 1500.0f;
   }
   return value;
 }
@@ -315,7 +330,7 @@ void showOnOled(const Reading &reading, const char *status) {
 
   display.setCursor(0, 21);
   display.print("THR ");
-  if (calibration.valid) display.print(calibration.thresholdMv, 0);
+  if (calibration.valid) display.print(warningThreshold(), 0);
   else display.print("--");
   display.print("mV");
 
@@ -339,24 +354,22 @@ void showOnOled(const Reading &reading, const char *status) {
   display.setCursor(0, 56);
   if (strstr(status, "GAS_WARNING")) display.print("GAS WARNING");
   else if (strstr(status, "MQ_ADC_HIGH")) display.print("MQ ADC HIGH");
-  else if ((sampleNumber & 1) == 0) {
-    char line[32]; cloud::testOledLine(line, sizeof(line)); display.print(line);
-  }
   else if (strstr(status, "CAL_STABILIZING")) display.print("CAL STABILIZING");
   else if (strstr(status, "CAL_COLLECTING")) display.print("CAL COLLECTING");
   else if (strstr(status, "AHT_ERROR")) display.print("AHT ERROR");
   else if (strstr(status, "BMP_ERROR")) display.print("BMP ERROR");
   else if (strstr(status, "WARMUP")) display.print("WARMUP");
   else if (strstr(status, "CAL_MISSING")) display.print("CAL MISSING");
-  else display.print("OK");
+  else { char line[32]; cloud::oledLine(line, sizeof(line)); display.print(line); }
   display.display();
 }
 
-void startCalibration() {
+bool startCalibration() {
+  if (calState != CalState::IDLE) { Serial.println("@CAL,FAILED,ALREADY_RUNNING"); return false; }
   if (!ahtReady) ahtReady = aht20.begin(&Wire, 0, AHT20_ADDRESS);
   if (!ahtReady) {
     Serial.println("@CAL,FAILED,AHT_NOT_DETECTED");
-    return;
+    return false;
   }
   mqMvStats.clear();
   tempStats.clear();
@@ -366,6 +379,8 @@ void startCalibration() {
   calStateStartedMs = millis();
   Serial.println("@CAL,STATE,STABILIZING");
   Serial.println("Keep the conditioned MQ-135 in stable clean reference air.");
+  cloud::log("info", "Calibration stabilization started in confirmed reference conditions");
+  return true;
 }
 
 void finishCalibration() {
@@ -373,6 +388,8 @@ void finishCalibration() {
   if (mqMvStats.count < MIN_CAL_SAMPLES || tempStats.count < MIN_CAL_SAMPLES ||
       humidityStats.count < MIN_CAL_SAMPLES) {
     Serial.println("@CAL,FAILED,TOO_FEW_VALID_SAMPLES");
+    cloud::finishCalibrationCommand(false,"Too few valid calibration samples");
+    cloud::log("error","Calibration failed: too few valid samples");
     return;
   }
 
@@ -387,13 +404,19 @@ void finishCalibration() {
   next.valid = validCalibration(next);
   if (!next.valid) {
     Serial.println("@CAL,FAILED,UNSTABLE_OR_OUT_OF_RANGE");
+    cloud::finishCalibrationCommand(false,"Calibration unstable or out of range");
+    cloud::log("error","Calibration failed: unstable or out of range");
     return;
   }
   if (!saveCalibration(next)) {
     Serial.println("@CAL,FAILED,STORAGE_ERROR");
+    cloud::finishCalibrationCommand(false,"Calibration NVS write failed");
+    cloud::log("error","Calibration storage failed; prior calibration retained");
     return;
   }
   Serial.println("@CAL,SAVED");
+  cloud::finishCalibrationCommand(true,"Calibration collected, validated and saved to NVS");
+  cloud::log("info","Calibration saved");
   exportCalibration();
 }
 
@@ -452,7 +475,7 @@ void printReadingBlock(const Reading &reading, const char *status, uint32_t upti
   if (calibration.valid) {
     const float ratio = reading.mqAdcMv / calibration.baselineMv;
     Serial.printf("%.4fx (%+.1f%%) | Warning threshold %.0f mV\n",
-                  ratio, (ratio - 1.0f) * 100.0f, calibration.thresholdMv);
+                  ratio, (ratio - 1.0f) * 100.0f, warningThreshold());
   } else {
     Serial.println("NA | Warning threshold NA mV");
   }
@@ -502,54 +525,50 @@ bool formatLogRow(char *output, size_t capacity, const Reading &reading,
 
 void logReading(const Reading &reading, const char *status, uint32_t now,
                 uint32_t uptime) {
-  (void)uptime;
-  if (!cloud::mutex) return;
-  cloud::Guard lock;
-  quick::session.tick(now);
-  if (!quick::session.due(now)) return;
-  const bool changed = hasLogged && strcmp(status, lastLoggedStatus) != 0;
-  coop::Record record{};
-  memcpy(record.boot, cloud::bootId, sizeof(record.boot));
-  record.sample = sampleNumber;
-  record.uptimeMs = (esp_timer_get_time() - cloud::monitoringStartedUs) / 1000;
-  timeval clock{}; gettimeofday(&clock, nullptr);
-  if (clock.tv_sec >= 1704067200)
-    record.sampledUtcMs = static_cast<int64_t>(clock.tv_sec) * 1000 + clock.tv_usec / 1000;
+  (void)now; (void)uptime;
+  dashboard::Sample record;
+  record.seq = sampleNumber;
+  record.uptimeMs = cloud::uptimeMs();
+  record.sampledUtcMs = cloud::utcMs();
+  const auto config = cloud::config();
+  record.configRevision = config.revision;
+  record.calibrationRevision = calibrationRevision();
   record.mqRaw = reading.mqRaw;
-  record.mqAdcMv = reading.mqAdcMv;
-  record.mqModuleV = reading.mqModuleV;
+  record.mqMv = reading.mqAdcMv;
   record.mqRatio = calibration.valid ? reading.mqAdcMv / calibration.baselineMv : NAN;
+  record.mqThresholdMv = warningThreshold();
   record.ahtTemperatureC = reading.ahtValid ? reading.ahtTemperatureC : NAN;
-  record.humidityPercent = reading.ahtValid ? reading.humidityPercent : NAN;
+  record.humidityPct = reading.ahtValid ? reading.humidityPercent : NAN;
   record.bmpTemperatureC = reading.bmpValid ? reading.bmpTemperatureC : NAN;
   record.pressureHpa = reading.bmpValid ? reading.pressureHpa : NAN;
-  record.reason = changed ? 1 : 0;
-  const char *flags[] = {"WARMUP", "CAL_MISSING", "CAL_STABILIZING", "CAL_COLLECTING",
-    "AHT_ERROR", "BMP_ERROR", "OLED_ERROR", "MQ_ADC_HIGH", "GAS_WARNING"};
-  for (unsigned bit = 0; bit < 9; ++bit) if (strstr(status, flags[bit]))
-    record.status |= 1 << bit;
-  quick::encode(record, quick::session.data(), quick::session.elapsed(now));
-  const bool saved = cloud::queue.push(record, false);
-  cloud::refreshQueueState();
-  if (!saved) {
-    quick::session.storageError(now);
-    Serial.println("@TEST,ERROR,READING_NOT_SAVED_SESSION_STOPPED"); return;
-  }
-  quick::session.committed(now);
-  hasLogged = true;
-  snprintf(lastLoggedStatus, sizeof(lastLoggedStatus), "%s", status);
+  snprintf(record.status, sizeof(record.status), "%s", status);
+  dashboard::Report report;
+  report.applied = config;
+  report.calibrated = calibration.valid;
+  const uint64_t elapsed = cloud::uptimeMs() - startedUptimeMs;
+  report.warmupRemainingSec = elapsed < BOOT_WARMUP_MS ? (BOOT_WARMUP_MS - elapsed + 999) / 1000 : 0;
+  report.calibrationRevision = record.calibrationRevision;
+  report.calibrationSamples = calibration.samples;
+  report.baselineMv = calibration.baselineMv;
+  report.calibrationThresholdMv = calibration.thresholdMv;
+  report.sdMv = calibration.sdMv;
+  report.temperatureC = calibration.temperatureC;
+  report.humidityPct = calibration.humidityPercent;
+  snprintf(report.status, sizeof(report.status), "%s", status);
+  cloud::publish(record, report);
 }
 
 void takeReading() {
   const uint32_t now = millis();
   const Reading reading = readSensors();
+  if (sampleNumber == UINT32_MAX) { cloud::log("error", "Sequence exhausted; logical boot must change before more samples"); return; }
   ++sampleNumber;
   updateCalibration(reading, now);
 
   char status[160] = "";
   if (calState == CalState::STABILIZING) addFlag(status, sizeof(status), "CAL_STABILIZING");
   if (calState == CalState::COLLECTING) addFlag(status, sizeof(status), "CAL_COLLECTING");
-  if (now - startedMs < BOOT_WARMUP_MS) addFlag(status, sizeof(status), "WARMUP");
+  if (cloud::uptimeMs() - startedUptimeMs < BOOT_WARMUP_MS) addFlag(status, sizeof(status), "WARMUP");
   if (!calibration.valid) addFlag(status, sizeof(status), "CAL_MISSING");
   if (!reading.ahtValid) addFlag(status, sizeof(status), "AHT_ERROR");
   if (!reading.bmpValid) addFlag(status, sizeof(status), "BMP_ERROR");
@@ -557,16 +576,16 @@ void takeReading() {
   const bool adcHigh = reading.mqAdcMv >= ADC_WARNING_MV;
   if (adcHigh) addFlag(status, sizeof(status), "MQ_ADC_HIGH");
 
-  if (calState != CalState::IDLE || now - startedMs < BOOT_WARMUP_MS ||
-      !calibration.valid || adcHigh) {
+  if (calState != CalState::IDLE || cloud::uptimeMs() - startedUptimeMs < BOOT_WARMUP_MS ||
+      !calibration.valid || adcHigh || !reading.ahtValid || !reading.bmpValid) {
     warningStreak = 0;
   } else {
-    if (reading.mqAdcMv >= calibration.thresholdMv) {
+    if (reading.mqAdcMv >= warningThreshold()) {
       if (warningStreak < 255) ++warningStreak;
     } else {
       warningStreak = 0;
     }
-    if (warningStreak >= WARNING_CONFIRMATION_SAMPLES) {
+    if (warningStreak >= cloud::config().consecutive) {
       addFlag(status, sizeof(status), "GAS_WARNING");
     }
   }
@@ -646,24 +665,72 @@ void importCalibration(char *fieldsText) {
   Serial.println("@CAL,IMPORTED");
 }
 
-void handleCommand(char *command) {
-  const quick::CalibrationSnapshot snapshot{calibration.baselineMv, calibration.thresholdMv,
-    calibration.sdMv, calibration.samples, calibration.temperatureC, calibration.humidityPercent};
-  if (cloud::testCommand(command, snapshot, calibration.valid && calState == CalState::IDLE)) return;
-  if ((!strcmp(command, "CAL START") || !strncmp(command, "CAL IMPORT,", 11)) && cloud::calibrationLocked()) {
-    Serial.println("@CAL,ERROR,TEST_ARMED_OR_RECORDING"); return;
+void cancelCalibration(const char *reason) {
+  calState = CalState::IDLE;
+  warningStreak = 0;
+  cloud::finishCalibrationCommand(false, reason);
+  cloud::log("info", reason);
+  Serial.println("@CAL,CANCELLED");
+}
+
+void processRemoteCommands() {
+  dashboard::Command command;
+  if (!cloud::nextCommand(command)) return;
+  char result[384]{};
+  using dashboard::CommandType;
+  using dashboard::Phase;
+  switch (command.type) {
+    case CommandType::CAL_SHOW:
+    case CommandType::CAL_EXPORT:
+      exportCalibration();
+      if (calibration.valid) snprintf(result, sizeof(result), "sensor=%s; revision=%lu; baseline_mv=%.3f; automatic_threshold_mv=%.3f; active_threshold_mv=%.3f; sd_mv=%.3f; samples=%lu; temperature_c=%.2f; humidity_pct=%.2f",
+        SENSOR_ID, static_cast<unsigned long>(calibrationRevision()), calibration.baselineMv, calibration.thresholdMv, warningThreshold(), calibration.sdMv, static_cast<unsigned long>(calibration.samples), calibration.temperatureC, calibration.humidityPercent);
+      else snprintf(result, sizeof(result), "Calibration missing for %s", SENSOR_ID);
+      cloud::commandResult(command.id, Phase::COMPLETED, result);
+      break;
+    case CommandType::CAL_START:
+      if (startCalibration()) cloud::commandResult(command.id, Phase::RUNNING, "Calibration stabilizing for 10 minutes, then collecting for 5 minutes");
+      else cloud::commandResult(command.id, Phase::FAILED, "Calibration could not start: already running or AHT sensor unavailable");
+      break;
+    case CommandType::CAL_CANCEL:
+      cancelCalibration("Calibration cancelled through the owner dashboard");
+      cloud::commandResult(command.id, Phase::COMPLETED, "Calibration cancelled; previous saved profile retained");
+      break;
+    case CommandType::NET_STATUS:
+      cloud::statusText(result, sizeof(result));
+      cloud::commandResult(command.id, Phase::COMPLETED, result);
+      break;
+    case CommandType::NET_RECONNECT:
+      cloud::setReconnect(command.id);
+      break;
+    case CommandType::CONFIG_SHOW: {
+      const auto c = cloud::config();
+      snprintf(result, sizeof(result), "applied_revision=%lu; threshold_mode=%s; manual_mv=%u; consecutive=%u; sampling_interval_s=%u",
+        static_cast<unsigned long>(c.revision), c.manual ? "manual" : "automatic", c.manualThresholdMv, c.consecutive, c.intervalSec);
+      cloud::commandResult(command.id, Phase::COMPLETED, result);
+      break;
+    }
+    case CommandType::RESTART:
+      cloud::requestRestart(command.id); // Reboot after the running receipt is acknowledged.
+      break;
+    case CommandType::HELP:
+      cloud::commandResult(command.id, Phase::COMPLETED, "Supported: CAL_SHOW CAL_EXPORT CAL_START CAL_CANCEL NET_STATUS NET_RECONNECT CONFIG_SHOW RESTART HELP. Wi-Fi credentials, cloud token and calibration import are USB-only.");
+      break;
+    default:
+      cloud::commandResult(command.id, Phase::FAILED, "Unsupported command");
   }
+}
+
+void handleCommand(char *command) {
   if (strcmp(command, "CAL START") == 0) startCalibration();
   else if (strcmp(command, "CAL CANCEL") == 0) {
-    calState = CalState::IDLE;
-    warningStreak = 0;
-    Serial.println("@CAL,CANCELLED");
+    cancelCalibration("Calibration cancelled through USB");
   } else if (strcmp(command, "CAL SHOW") == 0 ||
              strcmp(command, "CAL EXPORT") == 0) exportCalibration();
   else if (strncmp(command, "CAL IMPORT,", 11) == 0) importCalibration(command + 11);
   else if (cloud::command(command)) {}
   else if (strcmp(command, "HELP") == 0) {
-    Serial.println("Commands: TEST ARM 15, TEST ARM 30, TEST STATUS, TEST STOP, TEST UPLOAD, TEST UPLOAD CANCEL, CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <url>, CLOUD TOKEN <64 hex>, NET STATUS, NET RECONNECT, QUEUE STATUS, QUEUE INIT EMPTY, HELP");
+    Serial.println("Commands: CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <endpoint>, CLOUD ID <id>, CLOUD TOKEN <64 lowercase hex>, NET STATUS, NET RECONNECT, CONFIG SHOW, HELP");
   } else if (command[0]) Serial.println("@CAL,ERROR,UNKNOWN_COMMAND");
 }
 
@@ -689,7 +756,8 @@ void readSerialCommands() {
 void setup() {
   Serial.begin(115200);
   delay(1200);
-  Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + QuickTest monitor");
+  Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + Cloudflare monitor");
+  Serial.printf("Firmware %s | Cloud protocol %lu\n", dashboard::FIRMWARE_VERSION, static_cast<unsigned long>(dashboard::PROTOCOL_VERSION));
   Serial.println("MQ output is relative gas response, not ammonia ppm.");
   Serial.println("New MQ-135 modules need more than 48 hours of initial conditioning.");
   Serial.println("Type HELP with Newline selected in Serial Monitor.");
@@ -706,20 +774,11 @@ void setup() {
   bmpReady = beginBmp280();
   if (bmpReady) Serial.printf("BMP280: connected at 0x%02X\n", bmpAddress);
   else Serial.println("BMP280: not detected (0x76/0x77)");
-  pinMode(TEST_STOP_BUTTON_PIN, INPUT_PULLUP);
   cloud::begin();
   loadCalibration();
   exportCalibration();
   startedMs = millis();
-  cloud::monitoringStartedUs = esp_timer_get_time();
-  if (cloud::mutex) {
-    cloud::Guard lock;
-    if (!quick::recover(cloud::storage, cloud::queue)) Serial.println("@TEST,ERROR,RECOVERY_OR_STORAGE");
-    else if (quick::session.data().phase == quick::ARMED) {
-      if (calibration.valid && quick::session.start(millis())) Serial.println("@TEST,RECORDING");
-      else Serial.println("@TEST,ERROR,START_NEEDS_VALID_CALIBRATION");
-    }
-  }
+  startedUptimeMs = cloud::uptimeMs();
   takeReading();
   lastSampleMs = millis();
 }
@@ -728,8 +787,17 @@ void loop() {
   readSerialCommands();
   cloud::announce();
   const uint32_t now = millis();
-  cloud::testTick(now, digitalRead(TEST_STOP_BUTTON_PIN) == LOW);
-  if (now - lastSampleMs >= SAMPLE_INTERVAL_MS) {
+  if (cloud::applyPendingConfig()) {
+    warningStreak = 0;
+    if (cloud::config().manual && calibration.valid && cloud::config().manualThresholdMv < calibration.baselineMv) {
+      Serial.println("@CONFIG,WARNING,MANUAL_THRESHOLD_BELOW_BASELINE");
+      cloud::log("warn", "Manual threshold is below the calibrated baseline");
+    }
+  }
+  processRemoteCommands();
+  if (cloud::restartReady()) { Serial.println("@NET,RESTARTING_AFTER_SERVER_RECEIPT"); Serial.flush(); ESP.restart(); }
+  const uint32_t interval = calState == CalState::IDLE ? cloud::config().intervalSec * 1000UL : SAMPLE_INTERVAL_MS;
+  if (now - lastSampleMs >= interval) {
     lastSampleMs = now;
     takeReading();
   }
