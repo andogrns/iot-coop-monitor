@@ -465,6 +465,9 @@ void printReadableStatus(const char *status) {
 
 // Keep labeled Serial output for live diagnostics and calibration commands.
 void printReadingBlock(const Reading &reading, const char *status, uint32_t uptime) {
+  // Skip optional USB diagnostics when the host is not draining the buffer.
+  // Sensing and cloud publication must never wait for Serial Monitor.
+  if (Serial.availableForWrite() < 768) return;
   Serial.printf("--- Sample %lu | Uptime %02lu:%02lu:%02lu ---\n",
                 (unsigned long)sampleNumber, (unsigned long)(uptime / 3600UL),
                 (unsigned long)((uptime / 60UL) % 60UL),
@@ -592,9 +595,9 @@ void takeReading() {
   if (!status[0]) strcpy(status, "OK");
 
   const uint32_t uptime = (now - startedMs) / 1000UL;
-  printReadingBlock(reading, status, uptime);
   logReading(reading, status, now, uptime);
   showOnOled(reading, status);
+  printReadingBlock(reading, status, uptime);
 }
 
 bool parseUnsigned(const char *text, uint32_t &value) {
@@ -755,6 +758,8 @@ void readSerialCommands() {
 
 void setup() {
   Serial.begin(115200);
+  Serial.setTxBufferSize(2048);
+  Serial.setTxTimeoutMs(0);
   delay(1200);
   Serial.println("ESP32-C3 MQ-135 + AHT20/BMP280 + OLED + Cloudflare monitor");
   Serial.printf("Firmware %s | Cloud protocol %lu\n", dashboard::FIRMWARE_VERSION, static_cast<unsigned long>(dashboard::PROTOCOL_VERSION));

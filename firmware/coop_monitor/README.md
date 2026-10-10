@@ -1,8 +1,8 @@
 # ESP32-C3 monitor with Cloudflare
 
-Updated 10 October 2026. This is the active `main` implementation. It continuously reads MQ-135, AHT20/BMP280 and OLED, and exchanges readings, settings, logs and command results with the deployed private dashboard.
+Updated 10 October 2026. This implementation continuously reads MQ-135, AHT20/BMP280 and OLED, and exchanges readings, settings, logs and command results with the deployed private dashboard. Current firmware is `cloudflare-1.0.1`, including the USB backpressure fix and transport diagnostics.
 
-The source compiles for the ESP32-C3 SuperMini. This update has **not** been flashed to the physical device. Follow the USB cutover below before expecting real readings in Cloudflare. A Git branch change does not change installed firmware.
+Firmware `cloudflare-1.0.1` is installed on the ESP32-C3 SuperMini. A verified full 4 MB flash backup and calibration export preceded the erase-all-off upload. Calibration and existing Wi-Fi/device settings were retained; real sensor readings and applied configuration revision 1 were read back from the Worker and dashboard. Readings continue with Serial Monitor closed. See [verification](../../VERIFICATION.md) for evidence and remaining acceptance work.
 
 MQ-135 values are relative gas response, not validated ammonia ppm. Default sensing is every **2 seconds**, with a **10-minute cold-boot warm-up**. Calibration, warm-up, invalid sensors and ADC-high status suppress gas warnings even with a manual threshold.
 
@@ -50,7 +50,7 @@ Board: `esp32:esp32:nologo_esp32c3_super_mini`, USB CDC on boot, 4 MB flash, no 
    ```
 
    The helper reads ignored `dashboard.local.json`, prompts for a **2.4 GHz** Wi-Fi SSID and password, saves settings and requests reconnect. Passwords/tokens are not printed. It accepts open networks, 8–63 UTF-8 password bytes or a 64-character hex key. Provisioning writes to NVS; it does not flash the firmware.
-5. Reopen Serial Monitor. Expect `CLOUD CONNECTED` after Wi-Fi and NTP time synchronization. Confirm `CONFIG SHOW` reaches desired revision 1 or the dashboard's current revision. Open [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/) using the separate owner key, and confirm actual sensor readings, device uptime and firmware version `cloudflare-1.0.0`.
+5. Reopen Serial Monitor. Expect `CLOUD CONNECTED` after Wi-Fi and NTP time synchronization. Confirm `CONFIG SHOW` reaches desired revision 1 or the dashboard's current revision. Open [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/) using the separate owner key, and confirm actual sensor readings, device uptime and the installed firmware version.
 
 The backend has already registered **`coop-monitor-01`**. You do not need another D1 database, R2 bucket or device registration. The local provisioning file contains protocol version 1, that ID, the exact exchange endpoint and its device token. `dashboard.example.json` is a safe template for another authorized provisioning setup. Legacy `cloud.local.json` has a different format/token and is not used by the current helper.
 
@@ -74,6 +74,8 @@ Accepted calibration remains in the unchanged `coopcal` namespace with the exist
 - At 2-second sampling the buffer holds roughly **128 seconds**. When full, it drops oldest readings and increments the per-boot drop count. A power loss/restart discards pending RAM data and resets these counters. There is no flash measurement recovery or offline field-session recorder in this build.
 - Owner/capacity upload pauses leave local sensing and warnings running. Exchanges usually slow to 60 seconds; pending command receipts temporarily use 2 seconds so commands can acknowledge/complete. The deployed backend does not persist fresh device state/readings/logs while data writes are paused, so dashboard values can become stale. Existing stored history remains accessible where provider quotas permit.
 - Local logs aggregate status changes and command/calibration outcomes; routine sample blocks stay on USB Serial. Firmware buffers and backend hourly log limits can discard logs. The cloud console is not a copy of ROM bootloader output or every USB line.
+
+Firmware `cloudflare-1.0.1` makes USB TX nonblocking and skips optional sample blocks when the host does not consume data. Cloud publication/OLED update precede optional Serial output. `NET STATUS` includes Wi-Fi status/RSSI, clock readiness, HTTP and TLS errors, attempt/success uptime, free heap and network-task stack headroom. It omits credentials. Transport connection/read timeouts are 15 seconds; TLS validation remains enabled. Physical history readback confirmed approximately two-second sampling and continued HTTPS uploads with the serial reader closed.
 
 D1 keeps recent full-resolution samples for 30 days. Older data is archived to private compressed R2 files with checksum/readback verification before deleting the matching D1 source. See [operations](../../cloud/coop-monitor-worker/OPERATIONS.md). Included-capacity guards and billing notifications do not guarantee a provider-enforced zero-cost cap.
 
@@ -123,6 +125,6 @@ The endpoint is restricted to `https://coop-monitor-worker.coop-monitor-worker.w
 | `UPLOADS PAUSED` | Inspect owner pause/capacity in the dashboard; local sensing continues |
 | Configuration failed / commands blocked | Inspect error and preserve NVS/flash backup; do not erase calibration or command evidence as a routine repair |
 
-Physical acceptance remains: read back calibration/settings after upload and power cycle; observe real records and dashboard freshness; check warm-up/warning guards; change settings and inspect desired/applied revisions; exercise each supported command, Wi-Fi loss/reconnect, RAM overflow and owner pause; observe restart recovery; then collect a 24-hour device run and actual resource usage. Compilation and the earlier synthetic backend checks do not establish those physical results.
+Completed physical checks: erase-all-off upload, matching calibration export after reset, retained provisioning/applied revision 1, real records in history and dashboard, and continued sampling/uploads with the serial reader closed. Remaining acceptance: an independent power cycle; warm-up/warning guards and OLED observation; changed desired/applied settings; each supported command; Wi-Fi loss/reconnect, RAM overflow, owner pause and restart recovery; then a 24-hour device run and actual resource usage. Short recovery observations do not establish those longer physical results.
 
 The old `cloud_runtime.h`, flash/session headers, SD tools and `test_wifi_cloud.ps1` remain historical support. They are not the active Cloudflare runtime or evidence of its device behavior. For those workflows use `codex/wifi-cloud`, `codex/quicktest`, or the original SD commit. Optional computer Serial capture remains manually controlled and is not required for cloud operation. See [verification](../../VERIFICATION.md) and the [firmware handoff](../../cloud/coop-monitor-worker/FIRMWARE_HANDOFF.md).

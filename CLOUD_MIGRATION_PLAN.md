@@ -1,6 +1,6 @@
 # Cloud migration: implementation and workspace map
 
-Prepared 8 October 2026; updated 10 October 2026, Asia/Jakarta. The Cloudflare backend is deployed. ESP32-C3 Cloudflare source and documentation are implemented and compiled for publication on `main`. **The physical device has not been flashed or provisioned with this implementation.** See [verification](VERIFICATION.md) and the [deployment record](cloud/coop-monitor-worker/DEPLOYMENT.md).
+Prepared 8 October 2026; updated 10 October 2026, Asia/Jakarta. The Cloudflare backend is deployed and the ESP32-C3 runs `cloudflare-1.0.1`. **Physical upload, retained calibration/provisioning, real HTTPS sensor readings and dashboard display are verified.** Uploads continue with the serial reader closed; extended field/fault acceptance remains. See [verification](VERIFICATION.md) and the [deployment record](cloud/coop-monitor-worker/DEPLOYMENT.md).
 
 ## Operating choices
 
@@ -72,7 +72,7 @@ Upload pauses preserve local sensing/warnings and usually use 60-second exchange
 
 Backend HTTP routes use `POST /api/device/exchange`, owner `GET /api/snapshot`, `/api/history`, `/api/export`, `/api/logs`, revisioned configuration, commands and authenticated archive routes. See the authoritative [API list](cloud/coop-monitor-worker/API.md).
 
-No new firmware test suite was added or run during this source update. Earlier backend acceptance and legacy host tests are recorded separately; compilation is the current firmware verification.
+No new firmware test suite was added or run during this source update. Earlier backend acceptance and legacy host tests are recorded separately. Firmware compilation and the subsequent approved physical connection investigation are documented in root verification.
 
 ## Deployment and data preservation
 
@@ -86,13 +86,13 @@ The source update was prepared on `codex/cloudflare-firmware` from `codex/quickt
 
 ## Remaining physical acceptance
 
-1. Preserve pending legacy records and calibration; identify the installed firmware and rollback source.
-2. Perform the deliberate USB cutover with full flash backup, no erase-all and no filesystem formatting. Provision using `dashboard.local.json`.
-3. Read calibration and settings back, then repeat after a power cycle.
-4. Observe actual sensor values, warm-up, local warning guards, OLED status, HTTPS ingestion and dashboard sample age.
+1. Completed: identified installed Cloudflare firmware and saved matching calibration/full 4 MB flash backups before repair.
+2. Completed: uploaded `cloudflare-1.0.1` with erase-all disabled, retained existing provisioning and left the previous filesystem untouched.
+3. Completed after upload/reset: matching calibration and settings revision 1. Still repeat after an independent power cycle.
+4. Completed: actual sensor history, HTTPS ingestion, dashboard display and two-second sampling with the serial reader closed. Still observe warm-up/warning guards and physical OLED status.
 5. Apply monitoring settings and inspect desired/applied revisions and resulting warning/sampling behavior.
 6. Exercise allowed commands, calibration outcomes, expiry, restart recovery and explicit uncertainty after interrupted operations.
 7. Exercise Wi-Fi loss/reconnect, RAM overflow and owner pause; inspect reported gaps and stale-state behavior.
 8. Observe a 24-hour physical run and measure account-wide request/write/storage/CPU usage. Compilation and synthetic traffic do not establish continuous field reliability or free-capacity headroom.
 
-Backend acceptance already exercised authenticated access, retries/configuration/commands, exports, verified R2 archive creation and controlled retention with synthetic fixtures. Those fixtures were removed afterward. No new physical sensor calibration, firmware upload or field validation was performed for this source publication.
+Backend acceptance already exercised authenticated access, retries/configuration/commands, exports, verified R2 archive creation and controlled retention with synthetic fixtures. Those fixtures were removed afterward. The later physical connection repair uploaded firmware and verified real sensor ingestion; it retained the accepted calibration and did not start a new calibration or establish extended field reliability.

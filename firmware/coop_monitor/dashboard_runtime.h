@@ -20,10 +20,16 @@ struct NetworkSettings {
   bool complete() const { return ssid[0] && !strcmp(url, ENDPOINT) && validToken(token) && validId(deviceId); }
 };
 struct NetworkState { bool wifi = false, paused = false, credentialError = false; uint32_t lastUploadMs = 0; char message[48] = "SETUP NEEDED"; };
+struct NetworkDiagnostic {
+  int httpStatus = 0, tlsError = 0;
+  uint32_t attemptedAtMs = 0, freeHeap = 0, stackFree = 0;
+  char stage[64] = "not attempted", detail[128]{};
+};
 static SemaphoreHandle_t mutex = nullptr;
 static TaskHandle_t worker = nullptr;
 static NetworkSettings network;
 static NetworkState netState;
+static NetworkDiagnostic diagnostic;
 static Ring<Sample, READING_CAPACITY> readings;
 static Ring<Log, LOG_CAPACITY> logs;
 static Report report;
@@ -60,6 +66,7 @@ inline void logLocked(const char *level, const char *message) {
 }
 inline void log(const char *level, const char *message) { if (!mutex) return; Guard lock; logLocked(level,message); }
 inline void message(const char *text, bool wifi) { Guard lock; netState.wifi=wifi; if(strcmp(netState.message,text)) { snprintf(netState.message,sizeof(netState.message),"%s",text); logLocked("info",text); } }
+inline void exchangeStage(const char *stage) { Guard lock; snprintf(diagnostic.stage,sizeof(diagnostic.stage),"%s",stage); }
 inline bool saveJournalLocked() {
   journal.checksum=crc32(&journal,offsetof(Journal,checksum));
   Preferences prefs; if (!prefs.begin("coopcmd",false)) { commandsBlocked=true; return false; }
@@ -202,14 +209,20 @@ inline bool acceptResponse(cJSON *root,const NetworkSettings &s,const Batch &b,u
   netState.lastUploadMs=millis();return true;
 }
 inline bool exchange(const NetworkSettings &s,const Batch &b,uint32_t &delayMs,int &status) {
-  char *json=payload(s,b);if(!json)return false;
+  { Guard lock; diagnostic=NetworkDiagnostic{};diagnostic.attemptedAtMs=millis();diagnostic.freeHeap=ESP.getFreeHeap();diagnostic.stackFree=uxTaskGetStackHighWaterMark(nullptr); }
+  exchangeStage("building request");
+  char *json=payload(s,b);if(!json) {exchangeStage("request allocation failed");return false;}
   if(strlen(json)>65536) {cJSON_free(json);return false;}
-  NetworkClientSecure client; client.setCACert(CLOUDFLARE_ROOTS); client.setHandshakeTimeout(10);
-  HTTPClient http;http.setConnectTimeout(5000);http.setTimeout(8000);http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);http.setReuse(false);
+  NetworkClientSecure client; client.setCACert(CLOUDFLARE_ROOTS); client.setHandshakeTimeout(15);
+  HTTPClient http;http.setConnectTimeout(15000);http.setTimeout(15000);http.setFollowRedirects(HTTPC_DISABLE_FOLLOW_REDIRECTS);http.setReuse(false);
   bool ok=false;
+  exchangeStage("opening HTTPS");
   if(http.begin(client,s.url)) {http.addHeader("Content-Type","application/json");http.addHeader("Authorization",String("Bearer ")+s.token);
+    exchangeStage("sending HTTPS request");
     status=http.POST(reinterpret_cast<uint8_t *>(json),strlen(json));cJSON_free(json);json=nullptr;
+    {Guard lock;diagnostic.httpStatus=status;diagnostic.tlsError=client.lastError(diagnostic.detail,sizeof(diagnostic.detail));if(status<0)snprintf(diagnostic.stage,sizeof(diagnostic.stage),"%s",HTTPClient::errorToString(status).c_str());else snprintf(diagnostic.stage,sizeof(diagnostic.stage),"HTTP %d; response pending",status);}
     if(status==200 && http.getSize()<=static_cast<int>(RESPONSE_LIMIT)) {BoundedResponse response;int length=http.writeToStream(&response);if(length>=0&&!response.overflow) {cJSON *root=cJSON_Parse(response.text.c_str());if(root) {ok=acceptResponse(root,s,b,delayMs);cJSON_Delete(root);}}}
+    if(status==200)exchangeStage(ok?"exchange accepted":"response invalid, oversized or interrupted");
     http.end();
   }
   if(json)cJSON_free(json);return ok;
@@ -265,7 +278,14 @@ inline void oledLine(char *out,size_t size) {Guard lock;snprintf(out,size,"%s",n
 inline void printConfig() {Monitoring c=config();Serial.printf("@CONFIG,revision=%lu,mode=%s,manual_mv=%u,consecutive=%u,interval_s=%u\n",static_cast<unsigned long>(c.revision),c.manual?"manual":"automatic",c.manualThresholdMv,c.consecutive,c.intervalSec);}
 inline bool command(const char *text) {
   if(!mutex)return false;
-  if(!strcmp(text,"NET STATUS")) {char line[192];statusText(line,sizeof(line));Serial.printf("@NET,STATUS,%s\n",line);Guard lock;Serial.printf("@NET,SETTINGS,ssid=%s,password=%s,endpoint=%s,device=%s,token=%s\n",network.ssid[0]?"configured":"missing",network.password[0]?"configured":"open",!strcmp(network.url,ENDPOINT)?"configured":"invalid",network.deviceId,network.token[0]?"configured":"missing");return true;}
+  if(!strcmp(text,"NET STATUS")) {
+    char line[192];statusText(line,sizeof(line));NetworkSettings settings;NetworkDiagnostic diag;NetworkState state;
+    {Guard lock;settings=network;diag=diagnostic;state=netState;}
+    Serial.printf("@NET,STATUS,%s\n",line);
+    Serial.printf("@NET,SETTINGS,ssid=%s,password=%s,endpoint=%s,device=%s,token=%s\n",settings.ssid[0]?"configured":"missing",settings.password[0]?"configured":"open",!strcmp(settings.url,ENDPOINT)?"configured":"invalid",settings.deviceId,settings.token[0]?"configured":"missing");
+    Serial.printf("@NET,DIAGNOSTIC,wifi_status=%d,rssi=%d,clock=%s,http=%d,tls=%d,stage=%s,detail=%s,attempt_ms=%lu,success_ms=%lu,heap=%lu,stack_free=%lu\n",WiFi.status(),WiFi.RSSI(),utcMs()?"ready":"unknown",diag.httpStatus,diag.tlsError,diag.stage,diag.detail,static_cast<unsigned long>(diag.attemptedAtMs),static_cast<unsigned long>(state.lastUploadMs),static_cast<unsigned long>(diag.freeHeap),static_cast<unsigned long>(diag.stackFree));
+    return true;
+  }
   if(!strcmp(text,"NET RECONNECT")) {setReconnect();Serial.println("@NET,RECONNECTING");return true;}
   if(!strcmp(text,"CONFIG SHOW")) {printConfig();return true;}
   if(!strcmp(text,"WIFI OPEN")) {Guard lock;bool ok=saveSetting("coopnet","password","",network.password,sizeof(network.password));Serial.println(ok?"@NET,SAVED,password":"@NET,ERROR,SAVE_FAILED");return true;}
@@ -284,6 +304,8 @@ inline bool command(const char *text) {
   return false;
 }
 inline void announce() {
-  static char last[48]{};if(!mutex)return;Guard lock;if(strcmp(last,netState.message)) {snprintf(last,sizeof(last),"%s",netState.message);Serial.printf("@NET,%s,pending=%u,dropped=%lu,logs_dropped=%lu\n",last,static_cast<unsigned>(readings.count),static_cast<unsigned long>(readings.dropped),static_cast<unsigned long>(logs.dropped));}
+  static char last[48]{};if(!mutex)return;bool changed=false;size_t pending;uint32_t readingDrops,logDrops;
+  {Guard lock;changed=strcmp(last,netState.message)!=0;if(changed)snprintf(last,sizeof(last),"%s",netState.message);pending=readings.count;readingDrops=readings.dropped;logDrops=logs.dropped;}
+  if(changed)Serial.printf("@NET,%s,pending=%u,dropped=%lu,logs_dropped=%lu\n",last,static_cast<unsigned>(pending),static_cast<unsigned long>(readingDrops),static_cast<unsigned long>(logDrops));
 }
 } // namespace cloud

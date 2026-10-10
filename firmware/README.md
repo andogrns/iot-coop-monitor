@@ -12,7 +12,7 @@ MicroSD is unused in the active build. GPIO3 reads the divided MQ analog signal;
 
 Measurements are buffered in RAM and may be lost during long outages or reboot. Calibration, Wi-Fi/device credentials, monitoring settings and command receipts persist in NVS. The default reading interval is two seconds; remote settings and commands are supported. There is no OTA, battery monitor, RTC, buzzer or relay output.
 
-The source compiled on 10 October 2026; physical cutover and real device acceptance remain pending. See [verification](../VERIFICATION.md).
+Firmware `cloudflare-1.0.1` was compiled and uploaded on 10 October 2026 after calibration/full-flash backup. Retained calibration/settings and real sensor ingestion were verified, including operation with the serial reader closed. Extended device acceptance remains; see [verification](../VERIFICATION.md).
 
 ## Historical source
 

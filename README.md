@@ -16,7 +16,7 @@ The firmware keeps OLED readings, readable USB Serial output, saved calibration 
 
 Dashboard: [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/). Sign in with the owner key in the ignored `cloud/coop-monitor-worker/.credentials.local.json`. Device provisioning uses the separate ignored `firmware/coop_monitor/dashboard.local.json`; credentials are not in Git.
 
-The Cloudflare backend was deployed and checked with synthetic fixtures on 10 October 2026. The new ESP32-C3 firmware compiles; physical flashing, provisioning, real sensor ingestion and device acceptance remain pending. A Git update does not change the firmware installed on the ESP32.
+The Cloudflare backend was deployed and checked with synthetic fixtures on 10 October 2026. Firmware `cloudflare-1.0.1` is now installed on the physical ESP32-C3, with retained calibration/Wi-Fi settings and real sensor readings verified in the backend and dashboard. Uploads continue with Serial Monitor closed. Longer field operation, warning behavior and fault recovery remain separate acceptance work; see [verification](VERIFICATION.md).
 
 ## Historical implementations
 

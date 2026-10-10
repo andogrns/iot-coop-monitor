@@ -1,6 +1,6 @@
 # Coop Monitor backend
 
-Cloudflare Worker with a private owner dashboard, authenticated ESP32 device exchange, D1 recent history, remote settings/commands, and private R2 archives. Deployed 10 October 2026. Cloudflare firmware source is implemented and compiles; physical USB cutover, provisioning and device acceptance remain the next step.
+Cloudflare Worker with a private owner dashboard, authenticated ESP32 device exchange, D1 recent history, remote settings/commands, and private R2 archives. Deployed 10 October 2026. Physical device `coop-monitor-01` now runs `cloudflare-1.0.1`; real sensor ingestion and dashboard display are verified. Extended device acceptance remains in [root verification](../../VERIFICATION.md).
 
 ## Open the dashboard
 
@@ -8,7 +8,7 @@ Cloudflare Worker with a private owner dashboard, authenticated ESP32 device exc
 
 Sign in using `ownerKey` from the ignored `.credentials.local.json` beside this README. That key stays on this computer and the Worker secret store; it is not embedded in public assets. Owner sessions last 8 hours. Device tokens cannot open owner APIs.
 
-Provisioned device: `coop-monitor-01`. The ignored `../../firmware/coop_monitor/dashboard.local.json` contains its ID, HTTPS exchange endpoint and device token. Follow the [firmware guide](../../firmware/coop_monitor/README.md) to upload the new protocol-v1 firmware and provision it through USB. The existing device credential is ready; no new bucket or database is required.
+Provisioned device: `coop-monitor-01`. The ignored `../../firmware/coop_monitor/dashboard.local.json` contains its ID, HTTPS exchange endpoint and device token. The connected device already has these settings. Use the [firmware guide](../../firmware/coop_monitor/README.md) for future USB updates or Wi-Fi changes. No new bucket or database is required.
 
 ## Resources created
 

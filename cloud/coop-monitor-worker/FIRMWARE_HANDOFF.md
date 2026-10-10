@@ -2,7 +2,7 @@
 
 ## Provisioned connection
 
-The backend is prepared for `coop-monitor-01`. The ignored file `../../firmware/coop_monitor/dashboard.local.json` contains the complete device ID, HTTPS endpoint and device bearer token. The active firmware and `configure_network.ps1` now consume this protocol-v1 configuration. Source compilation passed on 10 October 2026; physical USB cutover/provisioning is still pending. See the [firmware guide](../../firmware/coop_monitor/README.md).
+The backend is connected to physical `coop-monitor-01`, running `cloudflare-1.0.1`. The ignored file `../../firmware/coop_monitor/dashboard.local.json` contains the complete device ID, HTTPS endpoint and device bearer token. The active firmware and `configure_network.ps1` consume this protocol-v1 configuration. Compilation, erase-all-off upload, preserved calibration/settings and real HTTPS sensor ingestion were verified on 10 October 2026. See the [firmware guide](../../firmware/coop_monitor/README.md).
 
 Endpoint: `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange`
 
@@ -27,7 +27,7 @@ Example (substitute real measurements):
   "bootId": "random-boot-id",
   "state": {
     "uptimeMs": 12000,
-    "firmwareVersion": "cloudflare-1.0.0",
+    "firmwareVersion": "cloudflare-1.0.1",
     "appliedConfigRevision": 1,
     "configStatus": "applied",
     "configError": "",
@@ -70,8 +70,8 @@ The active sketch includes `dashboard_runtime.h` and `dashboard_protocol.h`. Rea
 
 Public ISRG Root X1/X2 and GTS roots are in `cloudflare_roots.h`; `refresh_tls_roots.mjs` refreshes the ISRG roots from official sources after fingerprint verification. NTP precedes TLS; hostname/certificate validation remains enabled. Legacy queue/session headers are retained but not included by the active sketch, and old LittleFS bytes are not mounted or formatted.
 
-The ESP32-C3 source compilation used core 3.3.11, USB CDC enabled, no OTA, the existing 4 MB partition layout and erase-all disabled. See [root verification](../../VERIFICATION.md) for actual application/static RAM figures. No new firmware tests or physical upload were performed.
+The ESP32-C3 source compilation used core 3.3.11, USB CDC enabled, no OTA, the existing 4 MB partition layout and erase-all disabled. The approved physical upload preserved NVS and the previous filesystem. USB TX is nonblocking; optional Serial output cannot hold up normal sampling. See [root verification](../../VERIFICATION.md) for build figures, backup details and physical history evidence.
 
 ## Hardware acceptance still required
 
-The backend probes use synthetic readings. Next perform the deliberate USB cutover and provisioning, then observe a physical session. Check preserved calibration/settings, warm-up, sensor/OLED/warning behavior, actual ESP32 TLS, Wi-Fi loss/reconnect, retries, RAM overflow, command replay prevention, desired/applied revision reporting and dashboard freshness. The new upload helper requires calibration export/chip identification and saves a full flash backup before writing; legacy pending data must first be preserved. Compilation and backend deployment do not establish physical device acceptance.
+The earlier backend probes used synthetic readings. The subsequent physical repair verified preserved calibration/settings, actual ESP32 TLS ingestion, dashboard display and sampling/uploads with the serial reader closed. Still check an independent power cycle, warm-up/warning guards, OLED behavior, changed settings, each command, Wi-Fi loss/reconnect, RAM overflow, pause and interrupted-command/restart recovery, then a 24-hour field run. Future uploads require calibration/chip checks and a full flash backup; preserve any legacy pending data first. Short live observations do not establish full physical acceptance.

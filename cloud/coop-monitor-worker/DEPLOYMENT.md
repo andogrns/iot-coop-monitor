@@ -1,6 +1,6 @@
 # Cloudflare deployment record
 
-Updated 10 October 2026, Asia/Jakarta. Backend deployed and production acceptance passed. Cloudflare ESP32 firmware source is implemented and compiles; physical USB cutover, provisioning and acceptance are pending. This firmware source update does not change the deployed Worker version.
+Updated 10 October 2026, Asia/Jakarta. Backend deployed and synthetic production acceptance passed. Physical ESP32 firmware `cloudflare-1.0.1` is now installed, with retained calibration/provisioning and real sensor readings verified in the backend/dashboard. Extended device acceptance remains. The firmware repair did not change the deployed Worker version.
 
 | Item | Live value |
 |---|---|
@@ -37,6 +37,7 @@ The independent device token is registered as a SHA-256 hash in D1. `../../firmw
 - Public TLS health, private API access, device protocol, configuration/commands, pause/resume, CSV, and R2 checksum/readback retention accepted using synthetic fixtures.
 - Final synthetic fixture contained 900 readings across 30 minute blocks; compressed archive was 12,973 bytes. Fixture object/device/rows were removed afterward.
 - Normal terminal wrapper `cf.ps1` prepared to resolve the earlier missing Node PATH issue.
+- Physical `coop-monitor-01` firmware updated to `cloudflare-1.0.1` after verified flash/calibration backups; real HTTPS ingestion, applied revision 1 and continued uploads with Serial Monitor closed confirmed. See [root verification](../../VERIFICATION.md) for this separate device investigation.
 
 No paid Workers upgrade, custom domain, extra storage product, S3 key, firmware erase/flash, or existing Apps Script/Sheets change was needed for this backend task. R2 remains metered outside included capacity; application guards and usage monitoring are described in `OPERATIONS.md`.
 

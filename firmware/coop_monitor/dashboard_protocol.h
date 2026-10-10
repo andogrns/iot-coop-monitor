@@ -6,7 +6,7 @@
 
 namespace dashboard {
 constexpr uint32_t PROTOCOL_VERSION = 1;
-constexpr char FIRMWARE_VERSION[] = "cloudflare-1.0.0";
+constexpr char FIRMWARE_VERSION[] = "cloudflare-1.0.1";
 constexpr char DEFAULT_DEVICE_ID[] = "coop-monitor-01";
 constexpr char ENDPOINT[] = "https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange";
 constexpr size_t READING_CAPACITY = 64, LOG_CAPACITY = 16, BATCH_SIZE = 12;
