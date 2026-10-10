@@ -9,7 +9,7 @@ Updated 10 October 2026, Asia/Jakarta. Backend deployed and synthetic production
 | Dashboard origin | `https://coop-monitor-worker.coop-monitor-worker.workers.dev` |
 | Device exchange | `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange` |
 | Protocol | Version 1 |
-| Active version | `46c5362c-39a0-4472-ba44-7f00fadbe996` |
+| Active version | `a56bc274-6d03-4ebb-afc9-414cb0a842e5` |
 | D1 database | `coop-monitor-db` |
 | D1 ID | `ea267d2d-f237-4374-9c72-d4fd6efb632c` |
 | D1 location | APAC; queries served by primary in HKG during checks |
@@ -38,6 +38,7 @@ The independent device token is registered as a SHA-256 hash in D1. `../../firmw
 - Final synthetic fixture contained 900 readings across 30 minute blocks; compressed archive was 12,973 bytes. Fixture object/device/rows were removed afterward.
 - Normal terminal wrapper `cf.ps1` prepared to resolve the earlier missing Node PATH issue.
 - Physical `coop-monitor-01` firmware updated to `cloudflare-1.0.1` after verified flash/calibration backups; real HTTPS ingestion, applied revision 1 and continued uploads with Serial Monitor closed confirmed. See [root verification](../../VERIFICATION.md) for this separate device investigation.
+- Overview spacing correction deployed: 16 px between the metrics and state/capacity rows, with a content-versioned stylesheet URL so cached clients load the new CSS on refresh. The live overview was visually reviewed; screenshot saved in ignored `outputs/cloudflare/overview-spacing-fixed.jpg`.
 
 No paid Workers upgrade, custom domain, extra storage product, S3 key, firmware erase/flash, or existing Apps Script/Sheets change was needed for this backend task. R2 remains metered outside included capacity; application guards and usage monitoring are described in `OPERATIONS.md`.
 

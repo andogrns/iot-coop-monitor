@@ -1,5 +1,10 @@
 # Coop Monitor verification
 
+## Overview spacing correction: 10 October 2026
+
+- Added a scoped 16 px gap between the overview metrics grid and state/capacity grid. The stylesheet link includes its content hash to avoid the older cached CSS observed during review.
+- Wrangler deployment completed as `a56bc274-6d03-4ebb-afc9-414cb0a842e5`. The actual owner dashboard was visually reviewed after refresh; its displayed row gap was 16 px and live telemetry remained visible. Screenshot: ignored `outputs/cloudflare/overview-spacing-fixed.jpg`. No test suite was added or run for this layout correction.
+
 ## Device connection investigation: 10 October 2026
 
 - COM5 identified as ESP32 USB VID `303A`, PID `1001`; the serial port was opened only after the owner closed Serial Monitor. Read-only `NET STATUS`, `CONFIG SHOW` and `CAL SHOW` confirmed the installed Cloudflare runtime, configured Wi-Fi/endpoint/device token, applied monitoring revision 1 and a valid retained 150-sample calibration profile. Live sensor blocks showed AHT20/BMP280 readings and warm-up status.
@@ -28,7 +33,7 @@
 
 ## Cloudflare backend deployment: 10 October 2026
 
-The deployed Worker version is `46c5362c-39a0-4472-ba44-7f00fadbe996`, with D1 `coop-monitor-db`, private R2 `coop-monitor-archives` and registered device `coop-monitor-01`. The earlier backend work passed **32 live acceptance checks** using identified synthetic data, including authentication, duplicate retries, settings/commands, pause/resume, export and verified archive/retention. Its final fixture contained 900 readings in 30 minute blocks; gzip readback/checksum passed and the fixtures were cleaned up. See [backend evidence](cloud/coop-monitor-worker/VERIFICATION.md) and [deployment details](cloud/coop-monitor-worker/DEPLOYMENT.md).
+The original backend acceptance used Worker version `46c5362c-39a0-4472-ba44-7f00fadbe996`, with D1 `coop-monitor-db`, private R2 `coop-monitor-archives` and registered device `coop-monitor-01`. The later overview spacing deployment is recorded above. The earlier backend work passed **32 live acceptance checks** using identified synthetic data, including authentication, duplicate retries, settings/commands, pause/resume, export and verified archive/retention. Its final fixture contained 900 readings in 30 minute blocks; gzip readback/checksum passed and the fixtures were cleaned up. See [backend evidence](cloud/coop-monitor-worker/VERIFICATION.md) and [deployment details](cloud/coop-monitor-worker/DEPLOYMENT.md).
 
 These were backend checks from the deployment stage, not newly run firmware tests. No backend redeployment, physical flash, calibration, real sensor ingestion or independent database restore was performed during the firmware source publication.
 

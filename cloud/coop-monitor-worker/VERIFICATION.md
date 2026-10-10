@@ -12,7 +12,7 @@ Wrangler 4.148.0, bundled Node 24.19.0, Windows PowerShell. The isolated accepta
 | Resource readback | D1 APAC, registered `coop-monitor-01`; secrets installed; cron deployed; R2 Standard/APAC with public access disabled | Wrangler/API metadata reads |
 | Credential exclusion | All 5 relevant local secret/provisioning/report paths matched Git ignore rules | `git check-ignore` |
 
-Active Worker version: `46c5362c-39a0-4472-ba44-7f00fadbe996`.
+Worker version used for these acceptance checks: `46c5362c-39a0-4472-ba44-7f00fadbe996`. The later overview spacing deployment is `a56bc274-6d03-4ebb-afc9-414cb0a842e5`; see `DEPLOYMENT.md`. No acceptance suite was rerun for the CSS correction.
 
 ## Production checks
 
@@ -27,7 +27,7 @@ Active Worker version: `46c5362c-39a0-4472-ba44-7f00fadbe996`.
 - Authenticated CSV export.
 - Aged fixture R2 write/readback and checksum; owner archive checksum/decompression; verified catalog; D1 source deleted only after verified archive.
 
-The acceptance script removed only its own randomly named `synthetic-*` device, cascaded fixture rows and the exact synthetic R2 object key. It reran capacity maintenance afterward. The production database is provisioned for the real device and contains no physical device readings yet.
+The acceptance script removed only its own randomly named `synthetic-*` device, cascaded fixture rows and the exact synthetic R2 object key. It reran capacity maintenance afterward. At the end of that acceptance stage, the production database was provisioned for the real device and contained no physical readings. Subsequent real device ingestion is documented in [root verification](../../VERIFICATION.md).
 
 ## Interpretation
 
