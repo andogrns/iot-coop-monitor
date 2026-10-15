@@ -1,5 +1,6 @@
-import { ApiError, DEFAULT_CONFIG, id, integer, validateConfig, validateCommand, mergeSamples, unpackSample, canTransition } from './protocol.js';
+import { ApiError, DEFAULT_CONFIG, id, integer, validateConfig, validateCommand, mergeSamples, packSample, unpackSample, canTransition } from './protocol.js';
 import { sha256 } from './auth.js';
+import { historyPage } from './history-pages.js';
 const iso = ms => new Date(ms).toISOString();
 export const blockKey = (anchor, uptime, bootId) => `${iso(anchor + Math.floor(uptime / 60000) * 60000)}_${bootId}`;
 const stmt = (db, sql, ...values) => db.prepare(sql).bind(...values);
@@ -71,7 +72,16 @@ export async function exchange(env, device, body) {
     if (!paused) {
       for (const [key, readings] of groups) {
         const old = await stmt(db, 'SELECT * FROM reading_windows WHERE device_id = ? AND block_id = ?', body.deviceId, key).first();
-        const tuples = mergeSamples(old ? JSON.parse(old.data_json) : [], readings);
+        const archived = JSON.parse(old?.archived_hashes_json ?? '{}'), unarchived = [];
+        for (const reading of readings) {
+          if (Object.hasOwn(archived, reading.seq)) {
+            if (await sha256(JSON.stringify(packSample(reading))) !== archived[reading.seq])
+              throw new ApiError(409, 'sample_conflict', 'A sample ID was reused with different values');
+          } else unarchived.push(reading);
+        }
+        const tuples = mergeSamples(old ? JSON.parse(old.data_json) : [], unarchived);
+        if (tuples.length + Object.keys(archived).length > 32)
+          throw new ApiError(400, 'invalid_payload', 'More than 32 readings in a minute; sampling must be at least 2 seconds');
         const state = key === liveKey ? JSON.stringify({ ...body.state, bootId: body.bootId, receivedAt }) : old?.state_json ?? null;
         const writes = key === liveKey ? windowCount + acceptedLogs.filter(l => !l.duplicate).length * 3 + resultUpdates.length + (old ? 0 : 2) : 0;
         statements.push(stmt(db, `INSERT INTO reading_windows(device_id,block_id,boot_id,anchor_ms,data_json,state_json,received_at,revision,request_count,estimated_writes)
@@ -121,18 +131,41 @@ export async function snapshot(env) {
 }
 export async function history(env, url) {
   const deviceId = id(url.searchParams.get('deviceId') ?? 'coop-monitor-01', 'deviceId');
+  if (url.searchParams.has('pageSize')) return historyPage(env, url, deviceId);
+  if (url.searchParams.get('mode') === 'latest') {
+    const limit = integer(Number(url.searchParams.get('limit') ?? 100), 'limit', 1, 100);
+    const now = Date.now(), from = now - Number(env.RETENTION_DAYS ?? 30) * 86400000;
+    // A nonempty minute block contributes at least one reading. Include all blocks
+    // overlapping the oldest selected block so readings from different boots sort correctly.
+    const rows = (await stmt(env.DB, `WITH recent AS (
+      SELECT block_id FROM reading_windows WHERE device_id=? AND data_json<>'[]' AND block_id>=?
+      ORDER BY block_id DESC LIMIT ?
+    ) SELECT boot_id,anchor_ms,data_json FROM reading_windows
+      WHERE device_id=? AND data_json<>'[]' AND block_id>=?
+      AND block_id>=strftime('%Y-%m-%dT%H:%M:%fZ',substr((SELECT MIN(block_id) FROM recent),1,24),'-60 seconds')`,
+      deviceId, iso(Math.max(0, from - 60000)), limit, deviceId, iso(Math.max(0, from - 60000))).all()).results;
+    const readings = rows.flatMap(row => JSON.parse(row.data_json).map(t => unpackSample(t, deviceId, row.boot_id, row.anchor_ms)))
+      .filter(r => Date.parse(r.estimatedAt) >= from && Date.parse(r.estimatedAt) <= now)
+      .sort((a, b) => Date.parse(b.estimatedAt) - Date.parse(a.estimatedAt) || b.bootId.localeCompare(a.bootId) || b.seq - a.seq)
+      .slice(0, limit);
+    return { readings, nextCursor: null, mode: 'latest', from: iso(from), to: iso(now), timeline: 'Latest readings ordered by server-anchored uptime, newest first' };
+  }
   const from = Date.parse(url.searchParams.get('from') ?? iso(Date.now() - 3600000)), to = Date.parse(url.searchParams.get('to') ?? iso(Date.now()));
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from || to - from > 31 * 86400000) throw new ApiError(400, 'invalid_range', 'Use a valid range up to 31 days');
-  const limit = integer(Number(url.searchParams.get('limit') ?? 30), 'limit', 1, 60), cursor = url.searchParams.get('cursor') ?? '';
+  const order = url.searchParams.get('order') ?? 'asc';
+  if (!['asc', 'desc'].includes(order)) throw new ApiError(400, 'invalid_order', 'History order must be asc or desc');
+  const descending = order === 'desc';
+  const limit = integer(Number(url.searchParams.get('limit') ?? 30), 'limit', 1, 60), cursor = url.searchParams.get('cursor') ?? (descending ? iso(to) : '');
   if (cursor.length > 160 || (cursor && !/^[A-Za-z0-9:_.-]+$/.test(cursor))) throw new ApiError(400, 'invalid_cursor', 'Invalid cursor');
-  const rows = (await stmt(env.DB, 'SELECT * FROM reading_windows WHERE device_id=? AND block_id>=? AND block_id<? AND block_id>? ORDER BY block_id LIMIT ?', deviceId, iso(Math.max(0, from - 60000)), iso(to), cursor, limit + 1).all()).results;
+  const rows = (await stmt(env.DB, `SELECT block_id,boot_id,anchor_ms,data_json FROM reading_windows WHERE device_id=? AND block_id>=? AND block_id<? AND block_id${descending ? '<' : '>'}? ORDER BY block_id ${descending ? 'DESC' : 'ASC'} LIMIT ?`, deviceId, iso(Math.max(0, from - 60000)), iso(to), cursor, limit + 1).all()).results;
   const page = rows.slice(0, limit), readings = page.flatMap(row => JSON.parse(row.data_json).map(t => unpackSample(t, deviceId, row.boot_id, row.anchor_ms))).filter(r => Date.parse(r.estimatedAt) >= from && Date.parse(r.estimatedAt) <= to);
-  return { readings, nextCursor: rows.length > limit ? page.at(-1).block_id : null, from: iso(from), to: iso(to), timeline: 'estimatedAt uses the server-anchored boot clock; sampledAt remains null when device UTC is unknown' };
+  if (descending) readings.sort((a, b) => Date.parse(b.estimatedAt) - Date.parse(a.estimatedAt) || b.bootId.localeCompare(a.bootId) || b.seq - a.seq);
+  return { readings, nextCursor: rows.length > limit ? page.at(-1).block_id : null, order, from: iso(from), to: iso(to), timeline: 'estimatedAt uses the server-anchored boot clock; sampledAt remains null when device UTC is unknown' };
 }
 export async function logs(env, url) {
   const deviceId = id(url.searchParams.get('deviceId') ?? 'coop-monitor-01'), cursor = url.searchParams.get('cursor');
   let position = [iso(Date.now() - 86400000), '', -1];
-  if (cursor) { try { position = JSON.parse(atob(cursor)); if (!Array.isArray(position) || position.length !== 3 || !Number.isFinite(Date.parse(position[0])) || typeof position[1] !== 'string' || !Number.isInteger(position[2])) throw Error(); } catch { throw new ApiError(400, 'invalid_cursor', 'Invalid log cursor'); } }
+  if (cursor) { try { if (cursor.length > 256) throw Error(); position = JSON.parse(atob(cursor)); if (!Array.isArray(position) || position.length !== 3 || typeof position[0] !== 'string' || !Number.isFinite(Date.parse(position[0])) || new Date(position[0]).toISOString() !== position[0] || typeof position[1] !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(position[1]) || !Number.isSafeInteger(position[2]) || position[2] < 0 || position[2] > 4294967295) throw Error(); } catch { throw new ApiError(400, 'invalid_cursor', 'Invalid log cursor'); } }
   const rows = (await stmt(env.DB, 'SELECT boot_id,seq,uptime_ms,sampled_at,received_at,level,message FROM device_logs WHERE device_id=? AND (received_at,boot_id,seq)>(?,?,?) ORDER BY received_at,boot_id,seq LIMIT 101', deviceId, ...position).all()).results;
   const page = rows.slice(0, 100), last = page.at(-1);
   return { logs: page, nextCursor: last ? btoa(JSON.stringify([last.received_at, last.boot_id, last.seq])) : cursor ?? null, hasMore: rows.length > 100 };

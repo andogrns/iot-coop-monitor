@@ -22,7 +22,11 @@ export function validateConfig(value) {
   return { mqThresholdMode: v.mqThresholdMode, manualThresholdMv: threshold, warningConsecutiveSamples: integer(v.warningConsecutiveSamples, 'warningConsecutiveSamples', 1, 10), samplingIntervalSec: integer(v.samplingIntervalSec, 'samplingIntervalSec', 2, 60) };
 }
 export function redact(message) {
-  return message.replace(/\b[a-f0-9]{64}\b/gi, '[redacted]').replace(/((?:password|token|authorization|secret|ssid)\s*[:=]\s*)([^\s,;]+)/gi, '$1[redacted]').slice(0, 512);
+  return message
+    .replace(/\b[a-f0-9]{64}\b/gi, '[redacted]')
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+\/-]+=*/gi, '$1 [redacted]')
+    .replace(/((?:password|token|authorization|secret|ssid)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\r\n,;]+)/gi, '$1[redacted]')
+    .slice(0, 512);
 }
 export function validateExchange(value) {
   const v = object(value, 'exchange');

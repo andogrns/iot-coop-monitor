@@ -1,26 +1,38 @@
-import { ApiError, validateExchange, id, SAMPLE_FIELDS } from './protocol.js';
+import { ApiError, validateExchange, id, object, SAMPLE_FIELDS } from './protocol.js';
 import { requireAdmin, requireDevice, makeSession, equal, sha256 } from './auth.js';
 import { exchange, snapshot, history, logs, setConfig, enqueueCommand, commandHistory, registerDevice } from './storage.js';
 import { maintenance, archiveList, archiveDownload } from './archive.js';
+import { archiveFolders, archiveFiles } from './archive-folders.js';
+import { archiveSelection, startManualArchive, continueManualArchive } from './manual-archive.js';
+import { createLoginThrottle } from './login-throttle.js';
+import { csvCell } from '../public/csv.js';
 const headers = { 'content-type':'application/json; charset=utf-8', 'cache-control':'no-store', 'x-content-type-options':'nosniff' };
 const json = (body,status=200,extra={}) => new Response(JSON.stringify(body), {status,headers:{...headers,...extra}});
 async function body(request) {
-  if (!request.headers.get('content-type')?.startsWith('application/json')) throw new ApiError(415,'json_required','Use application/json');
+  if (request.headers.get('content-type')?.split(';',1)[0].trim().toLowerCase() !== 'application/json') throw new ApiError(415,'json_required','Use application/json');
   if (Number(request.headers.get('content-length')) > 65536) throw new ApiError(413,'payload_too_large','Maximum body is 64 KiB');
   const reader = request.body?.getReader(); let size=0, chunks=[];
   if (reader) for (;;) { const part=await reader.read(); if(part.done) break; size+=part.value.length; if(size>65536){await reader.cancel();throw new ApiError(413,'payload_too_large','Maximum body is 64 KiB');} chunks.push(part.value); }
   const bytes=new Uint8Array(size); let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}
-  try { return JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new ApiError(400,'invalid_json','Invalid JSON'); }
+  let value;
+  try { value = JSON.parse(new TextDecoder().decode(bytes)); } catch { throw new ApiError(400,'invalid_json','Invalid JSON'); }
+  return object(value, 'request body');
 }
-const logins = new Map();
+const throttleLogin = createLoginThrottle();
+async function manualResponse(operation, status=200) {
+  try { return json(await operation(),status); }
+  catch(error) {
+    if(error instanceof ApiError)throw error;
+    console.error('manual_archive_failed');
+    throw new ApiError(503,'manual_archive_failed','Manual archiving stopped. Saved chunks are preserved; continue to retry.');
+  }
+}
 async function route(request,env) {
   const url=new URL(request.url), path=url.pathname, method=request.method;
   if(path==='/health' && method==='GET') { const row=await env.DB.prepare('SELECT 1 AS ok').first();return json({status:row?.ok===1?'ok':'degraded',service:'coop-monitor-worker',protocolVersion:1}); }
   if(path==='/auth/login' && method==='POST') {
     if(request.headers.get('origin')!==url.origin) throw new ApiError(403,'origin_rejected','Use this dashboard to sign in');
-    const ip=request.headers.get('cf-connecting-ip')??'local', now=Date.now(), record=logins.get(ip);
-    if(record && now-record.start<60000 && record.count>=10) throw new ApiError(429,'login_throttled','Wait one minute');
-    if(logins.size>1000)logins.clear();logins.set(ip,{start:record && now-record.start<60000?record.start:now,count:record && now-record.start<60000?record.count+1:1});
+    throttleLogin(request.headers.get('cf-connecting-ip')??'local');
     const v=await body(request);
     if(typeof v?.key!=='string'||v.key.length>128||!env.ADMIN_TOKEN||!equal(await sha256(v.key),await sha256(env.ADMIN_TOKEN)))throw new ApiError(401,'invalid_owner_key','Invalid owner key');
     return json({signedIn:true},200,{'set-cookie':`coop_session=${await makeSession(env.SESSION_SECRET)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`});
@@ -37,12 +49,17 @@ async function route(request,env) {
     if(path==='/api/history' && method==='GET')return json(await history(env,url));
     if(path==='/api/export' && method==='GET') {
       const page=await history(env,url),fields=['deviceId','bootId',...SAMPLE_FIELDS,'estimatedAt'];
-      const cell=v=>'"'+String(v??'').replace(/^[=+@-]/,'\t$&').replaceAll('"','""')+'"';
-      const csv=[fields.join(','),...page.readings.map(r=>fields.map(f=>cell(r[f])).join(','))].join('\r\n');
+      const csv=[fields.join(','),...page.readings.map(r=>fields.map(f=>csvCell(r[f])).join(','))].join('\r\n');
       return new Response(csv,{headers:{'content-type':'text/csv; charset=utf-8','cache-control':'no-store','content-disposition':'attachment; filename="coop-readings-page.csv"','x-next-cursor':page.nextCursor??''}});
     }
     if(path==='/api/logs' && method==='GET')return json(await logs(env,url));
     if(path==='/api/archives' && method==='GET')return json(await archiveList(env,url));
+    if(path==='/api/archive-folders' && method==='GET')return json(await archiveFolders(env,url));
+    if(path==='/api/archive-files' && method==='GET')return json(await archiveFiles(env,url));
+    if(path==='/api/archives/selection' && method==='GET')return json(await archiveSelection(env,url));
+    if(path==='/api/archives/manual' && method==='POST'){const value=await body(request);return manualResponse(()=>startManualArchive(env,value),201);}
+    const manualMatch=/^\/api\/archives\/manual\/([A-Za-z0-9_-]{1,64})$/.exec(path);
+    if(manualMatch && method==='POST')return manualResponse(()=>continueManualArchive(env,manualMatch[1]));
     if(path==='/api/archive' && method==='GET')return archiveDownload(env,url.searchParams.get('key')??'');
     if(path==='/api/devices' && method==='POST')return json(await registerDevice(env,await body(request)),201);
     if(path==='/api/maintenance' && method==='POST')return json(await maintenance(env));
@@ -62,6 +79,6 @@ async function route(request,env) {
   result.headers.set('x-content-type-options','nosniff');result.headers.set('referrer-policy','no-referrer');return result;
 }
 export default {
-  async fetch(request,env){try{return await route(request,env);}catch(e){if(e instanceof ApiError)return json({error:e.code,message:e.message},e.status);console.error('request_failed',e.name,String(e.message).slice(0,200));return json({error:'backend_unavailable',message:'Backend operation failed; retry with the same sample IDs'},503);}},
-  scheduled(event,env,ctx){ctx.waitUntil(maintenance(env));}
+  async fetch(request,env){try{return await route(request,env);}catch(e){if(e instanceof ApiError)return json({error:e.code,message:e.message},e.status);console.error('request_failed');return json({error:'backend_unavailable',message:'Backend operation failed; retry with the same sample IDs'},503);}},
+  scheduled(event,env,ctx){ctx.waitUntil(maintenance(env).catch(() => { console.error('scheduled_maintenance_failed'); throw new Error('Scheduled maintenance failed'); }));}
 };

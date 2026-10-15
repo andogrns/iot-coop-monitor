@@ -10,9 +10,12 @@ async function sign(value, secret) {
   const key = await crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   return [...new Uint8Array(await crypto.subtle.sign('HMAC', key, encoder.encode(value)))].map(b => b.toString(16).padStart(2, '0')).join('');
 }
-export async function makeSession(secret, now = Date.now()) { const payload = `${now + 8 * 3600000}.${crypto.randomUUID()}`; return `${payload}.${await sign(payload, secret)}`; }
+export async function makeSession(secret, now = Date.now()) {
+  if (typeof secret !== 'string' || !secret.trim()) throw new ApiError(503, 'authentication_unavailable', 'Owner sessions are unavailable');
+  const payload = `${now + 8 * 3600000}.${crypto.randomUUID()}`; return `${payload}.${await sign(payload, secret)}`;
+}
 export async function validSession(session, secret, now = Date.now()) {
-  if (typeof session !== 'string' || session.length > 180 || !secret) return false;
+  if (typeof session !== 'string' || session.length > 180 || typeof secret !== 'string' || !secret.trim()) return false;
   const parts = session.split('.');
   if (parts.length !== 3 || !/^\d{13}$/.test(parts[0]) || Number(parts[0]) <= now || Number(parts[0]) > now + 8 * 3600000 + 60000) return false;
   return equal(await sign(`${parts[0]}.${parts[1]}`, secret), parts[2]);

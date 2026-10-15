@@ -48,29 +48,34 @@ export async function maintenance(env) {
   const holder = crypto.randomUUID(), now = Date.now();
   const lease = await stmt(env.DB, 'INSERT INTO maintenance_leases(key,holder,expires_ms) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET holder=excluded.holder,expires_ms=excluded.expires_ms WHERE maintenance_leases.expires_ms<?', 'maintenance', holder, now + 180000, now).run();
   if (!lease.meta.changes) return { status: 'already_running' };
-  let archive, error;
   try {
-    const cutoff = iso(now - 86400000);
-    await env.DB.batch([
-      stmt(env.DB, 'DELETE FROM device_logs WHERE (device_id,boot_id,seq) IN (SELECT device_id,boot_id,seq FROM device_logs WHERE received_at<? LIMIT 200)', cutoff),
-      stmt(env.DB, "UPDATE commands SET status='expired',updated_at=? WHERE status='queued' AND expires_at<?", iso(now), iso(now)),
-      env.DB.prepare('DELETE FROM boot_sessions WHERE (device_id,boot_id) IN (SELECT device_id,boot_id FROM boot_sessions WHERE NOT EXISTS (SELECT 1 FROM reading_windows w WHERE w.device_id=boot_sessions.device_id AND w.boot_id=boot_sessions.boot_id) AND created_at < datetime(\'now\',\'-31 days\') LIMIT 100)')
-    ]);
-    archive = await archiveOldest(env);
-  } catch (e) { error = String(e).slice(0, 250); console.error('maintenance_failed', error); }
-  const capacity = await updateCapacity(env);
-  const report = { checkedAt: iso(Date.now()), archive: archive ?? { status: 'failed', sourceRetained: true }, ...(error ? { error } : {}), capacity };
-  await env.DB.batch([
-    stmt(env.DB, 'INSERT INTO system_state(key,value_json,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at', 'maintenance', JSON.stringify(report), report.checkedAt),
-    stmt(env.DB, 'DELETE FROM maintenance_leases WHERE key=? AND holder=?', 'maintenance', holder)
-  ]);
-  return report;
+    let archive, error;
+    try {
+      const cutoff = iso(now - 86400000);
+      await env.DB.batch([
+        stmt(env.DB, 'DELETE FROM device_logs WHERE (device_id,boot_id,seq) IN (SELECT device_id,boot_id,seq FROM device_logs WHERE received_at<? LIMIT 200)', cutoff),
+        stmt(env.DB, "UPDATE commands SET status='expired',updated_at=? WHERE status='queued' AND expires_at<?", iso(now), iso(now)),
+        env.DB.prepare('DELETE FROM boot_sessions WHERE (device_id,boot_id) IN (SELECT device_id,boot_id FROM boot_sessions WHERE NOT EXISTS (SELECT 1 FROM reading_windows w WHERE w.device_id=boot_sessions.device_id AND w.boot_id=boot_sessions.boot_id) AND created_at < datetime(\'now\',\'-31 days\') LIMIT 100)')
+      ]);
+      archive = await archiveOldest(env);
+    } catch { error = 'archive_or_pruning_failed'; console.error('maintenance_failed'); }
+    const capacity = await updateCapacity(env);
+    const report = { checkedAt: iso(Date.now()), archive: archive ?? { status: 'failed', sourceRetained: true }, ...(error ? { error } : {}), capacity };
+    await stmt(env.DB, 'INSERT INTO system_state(key,value_json,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at', 'maintenance', JSON.stringify(report), report.checkedAt).run();
+    return report;
+  } finally {
+    // Release our own lease even if capacity collection or report persistence fails.
+    await stmt(env.DB, 'DELETE FROM maintenance_leases WHERE key=? AND holder=?', 'maintenance', holder).run();
+  }
 }
 export async function archiveList(env, url) {
   const deviceId = id(url.searchParams.get('deviceId') ?? 'coop-monitor-01'), cursor = url.searchParams.get('cursor') ?? '';
   if (cursor.length > 250) throw new ApiError(400, 'invalid_cursor', 'Invalid cursor');
-  const rows = (await stmt(env.DB, 'SELECT * FROM archive_manifests WHERE device_id=? AND object_key>? ORDER BY object_key LIMIT 101', deviceId, cursor).all()).results;
-  return { archives: rows.slice(0,100), nextCursor: rows.length > 100 ? rows[99].object_key : null };
+  const rows = (await stmt(env.DB, `SELECT a.*,m.label,m.range_from,m.range_to FROM archive_manifests a
+    LEFT JOIN manual_archives m ON m.archive_id=a.manual_archive_id
+    WHERE a.device_id=? AND a.object_key>? ORDER BY a.object_key LIMIT 101`, deviceId, cursor).all()).results;
+  const manualArchives = cursor ? [] : (await stmt(env.DB, 'SELECT * FROM manual_archives WHERE device_id=? ORDER BY created_at DESC LIMIT 100', deviceId).all()).results;
+  return { archives: rows.slice(0,100), manualArchives, nextCursor: rows.length > 100 ? rows[99].object_key : null };
 }
 export async function archiveDownload(env, key) {
   const manifest = await stmt(env.DB, 'SELECT * FROM archive_manifests WHERE object_key=?', key).first();

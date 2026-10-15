@@ -28,6 +28,10 @@ Manifest includes device/hour, sample/block counts, compressed size, compressed 
 
 ## Backup and recovery
 
+Manual range archives run from the Archives tab and share the automatic maintenance lease. Each request processes at most 30 matching blocks; the browser continues until the job completes. An interrupted job remains in the library with **Continue archiving**. Only selected tuples leave History after verified R2 readback and an atomic manifest/source/progress update. Labels/ranges are present in both catalog and gzip metadata. State, counters, outside-range tuples and archived sample fingerprints remain in D1; normal retention eventually removes those block records. Do not expect manual archiving to immediately remove all per-block database overhead.
+
+The displayed count is a snapshot of available individual entries. Creation checks it again. Subsequent late arrivals or automatic retention may change the final saved count; the job reports the actual archived count. Existing archives are excluded from selection. Count queries scan JSON tuples within an indexed device/range, while compression/mutations are chunked. Large selections add owner requests and database work; existing account-wide budget/orphan reconciliation limitations still apply. A lost chunk response can be continued safely using the saved job; an unverified R2 orphan is never catalogued or served.
+
 From this directory, use `cf.ps1`; it finds installed Node or the bundled runtime and fixes PATH for Wrangler.
 
 ```powershell
