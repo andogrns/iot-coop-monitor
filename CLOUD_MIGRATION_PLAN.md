@@ -1,12 +1,14 @@
 # Cloud migration: implementation and workspace map
 
-Prepared 8 October 2026; updated 10 October 2026, Asia/Jakarta. The Cloudflare backend is deployed and the ESP32-C3 runs `cloudflare-1.0.1`. **Physical upload, retained calibration/provisioning, real HTTPS sensor readings and dashboard display are verified.** Uploads continue with the serial reader closed; extended field/fault acceptance remains. See [verification](VERIFICATION.md) and the [deployment record](cloud/coop-monitor-worker/DEPLOYMENT.md).
+Prepared 8 October; source/documentation reviewed **22 October 2026 (Asia/Jakarta)**. This is the implemented migration/workspace map. The 10 October physical upload of `cloudflare-1.0.1`, retained calibration/provisioning, actual ingestion/dashboard readings and Serial-closed operation are dated observations, not today's installed firmware or uptime. Latest recorded backend rollout is 13 October; see [verification](VERIFICATION.md) and [deployment record](cloud/coop-monitor-worker/DEPLOYMENT.md).
+
+For ongoing work, start with [project context](PROJECT_CONTEXT.md), [stack architecture](docs/STACK_ARCHITECTURE.md), [project handoff](docs/PROJECT_HANDOFF.md) and [operations handoff](docs/OPERATIONS_HANDOFF.md). No production/device access was performed for this refresh.
 
 ## Operating choices
 
 | Item | Current implementation |
 |---|---|
-| Sampling | Every 2 seconds by default; configurable 2–60 seconds |
+| Sampling | Every 2 seconds by default; configurable 2–60 seconds; last stored 13 October setting was 30 seconds, not refreshed here |
 | Dashboard refresh | Every 4 seconds |
 | Recent history | Full-resolution D1 minute blocks, 30 days |
 | Older readings | Private compressed R2 archives; checksum/readback before source deletion |
@@ -16,7 +18,7 @@ Prepared 8 October 2026; updated 10 October 2026, Asia/Jakarta. The Cloudflare b
 | Remote operation | Allowed commands, bounded firmware logs, desired/applied settings revisions |
 | USB updates | 4 MB ESP32-C3, existing no-OTA partitions, erase-all disabled |
 | Access | Private owner session; separate device token |
-| Capacity | Warning near 80%; pause new data writes near 95% of application budgets |
+| Capacity | Storage/estimated-write warning near 80%; pause near 95% also considers estimated requests; request-only pause can lack a warning |
 | Spending | No automatic paid upgrade; application guards are not a provider billing cap |
 
 The user selected direct Cloudflare Workers after the original Sites proposal. Only Cloudflare is deployed for this implementation. A computer is needed for initial provisioning and USB updates, not routine data capture.
@@ -63,7 +65,7 @@ Upload pauses preserve local sensing/warnings and usually use 60-second exchange
 | SD transfer tools | Retained for historical SD firmware |
 | `cloud/apps-script/` | Preserved legacy backend and data workflow; existing deployment/Sheets unchanged |
 | `cloud/coop-monitor-worker/src/` | Protocol/auth, D1 storage, archives/retention/capacity |
-| `cloud/coop-monitor-worker/public/` | Owner overview/history/console/settings dashboard |
+| `cloud/coop-monitor-worker/public/` | Signal Overview/History/Console/Settings/Archives, trends, selection counts and verified ZIP downloads |
 | `cloud/coop-monitor-worker/migrations/` | Versioned D1 schema |
 | `cloud/coop-monitor-worker/wrangler.jsonc`, `cf.ps1` | Deployed bindings/cron and Windows runtime wrapper |
 | Backend `API.md`, `OPERATIONS.md`, `DEPLOYMENT.md`, `VERIFICATION.md`, `FIRMWARE_HANDOFF.md` | Actual routes, operating procedures, deployment evidence and firmware contract |
@@ -76,13 +78,13 @@ No new firmware test suite was added or run during this source update. Earlier b
 
 ## Deployment and data preservation
 
-The live Worker is [coop-monitor-worker](https://coop-monitor-worker.coop-monitor-worker.workers.dev/) with D1 `coop-monitor-db`, private R2 `coop-monitor-archives`, a 15-minute scheduled maintenance trigger, owner secrets and registered device `coop-monitor-01`. Firmware source publication does not require changing those resources. Current version/resource IDs are in the deployment record.
+The source-configured Worker is [coop-monitor-worker](https://coop-monitor-worker.coop-monitor-worker.workers.dev/) with D1 `coop-monitor-db`, private R2 `coop-monitor-archives`, a 15-minute scheduled maintenance trigger, owner secrets and device `coop-monitor-01`. Reuse existing resources. Recorded rollout/resource observations are in the deployment record; present production state was not queried on 22 October.
 
 Owner and device credentials remain separate and Git-ignored. The Worker uses the R2 binding directly; public bucket access and external S3 keys are unnecessary. Read [operations](cloud/coop-monitor-worker/OPERATIONS.md) for capacity estimates, manual owner pause, export/restore and credential rotation. Independent exports are still needed for recovery beyond the same hosting account.
 
 The new runtime does not mount, format or delete the old LittleFS records. Before physical cutover, upload/export pending legacy records and back up calibration. The upload helper saves a full flash image and SHA-256 before writing. Retaining bytes does not make old readings available in the new dashboard; the new firmware cannot ingest the legacy queue.
 
-The source update was prepared on `codex/cloudflare-firmware` from `codex/quicktest`, with the user's request to publish it to `main`. `codex/wifi-cloud` and `codex/quicktest` retain their historical source/workflows; the original SD source remains at `09aff6a`. Unrelated diagnostic sketches, procurement builders, proposal/CAD material and historical exports are outside this commit's scope.
+Historically, the migration source was prepared on `codex/cloudflare-firmware` from `codex/quicktest` for publication to `main`. The 22 October local inspection found branch `main`, HEAD `b4e5d30`; no remote check, commit or push was performed during this documentation refresh. `codex/wifi-cloud`/`codex/quicktest` refer to historical workflows; original SD source remains at `09aff6a`. Unrelated diagnostic/procurement/CAD/proposal files remain outside the active application scope.
 
 ## Remaining physical acceptance
 

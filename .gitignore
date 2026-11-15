@@ -19,9 +19,13 @@
 /firmware/coop_monitor/dashboard.local.json
 /firmware/coop_monitor/cloud.local.json
 
-# Local sensor captures and downloads
+# Arduino build output (compiled binaries, sdkconfig)
+/firmware/*/build/
+
+# Local sensor captures, raw dataset archives and downloads
 *.log
 *.csv
+*.zip
 !/firmware/coop_monitor/partitions.csv
 
 # Editor and system files

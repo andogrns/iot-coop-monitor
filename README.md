@@ -1,23 +1,35 @@
 # IoT Coop Monitor
 
-ESP32-C3 poultry-coop air-quality early-warning prototype using an MQ-135 gas sensor, an AHT20/BMP280 module, and an SSD1306 OLED. The MQ-135 output is a relative gas response, not a calibrated ammonia concentration.
+ESP32-C3 poultry-coop environmental monitoring and preliminary early warning using MQ-135, a combined AHT20/BMP280 module and an SSD1306 OLED. **MQ-135 measures relative gas response, not calibrated ammonia ppm.**
 
-`main` now contains continuous Wi-Fi monitoring through the deployed Cloudflare Worker, private owner dashboard, D1 recent history and private R2 archives. Default sampling is every two seconds; the dashboard refreshes every four seconds. Monitoring settings and supported commands travel through the same authenticated device exchange.
+Documentation refreshed **5 November 2026 (Asia/Jakarta)** against local source. Active stack: Arduino C++ firmware `cloudflare-1.0.4` → Wi-Fi/verified HTTPS protocol 1 → Cloudflare Worker → D1 recent history/private R2 archives → the Signal owner dashboard.
 
-The firmware keeps OLED readings, readable USB Serial output, saved calibration and warning guards. Measurements and logs use bounded RAM buffers: no MicroSD or persistent flash measurement queue is used. Wi-Fi loss, upload pauses and reboot can cause explicitly reported gaps. Calibration, credentials, monitoring settings and command receipts remain in NVS.
+Default sampling is every 2 seconds (configurable 2–60); device exchange normally runs about every 2 seconds independently; dashboard snapshots refresh every 4 seconds. Searchable retention is configured to 30 days, with archive maintenance every 15 minutes. These are source settings, not today's device/cloud readback.
 
-## Start here
+Firmware retains USB diagnostics, calibration and warning guards. OLED output is currently disabled and the display was intentionally disconnected in the last recorded bench test. Pending measurements/logs use bounded RAM and can be lost on overflow or reboot. Calibration, provisioning, settings and command receipts persist in NVS. Routine monitoring needs power and internet; it does not require an open Serial Monitor or computer logger.
 
-- [Firmware build, USB cutover and provisioning](firmware/coop_monitor/README.md)
-- [Current wiring and SD-free hardware](firmware/coop_monitor/WIRING.md)
-- [Private dashboard and Cloudflare operations](cloud/coop-monitor-worker/README.md)
-- [Implementation map and remaining acceptance](CLOUD_MIGRATION_PLAN.md)
-- [Verification evidence](VERIFICATION.md)
+## Documentation and handoff
 
-Dashboard: [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/). Sign in with the owner key in the ignored `cloud/coop-monitor-worker/.credentials.local.json`. Device provisioning uses the separate ignored `firmware/coop_monitor/dashboard.local.json`; credentials are not in Git.
+| Read | Purpose |
+|---|---|
+| [Project context](PROJECT_CONTEXT.md) | Session starting point; decisions, defaults, dated observations and open work |
+| [Stack architecture](docs/STACK_ARCHITECTURE.md) | Hardware → firmware → protocol → Worker → storage → dashboard, with source map |
+| [Project handoff](docs/PROJECT_HANDOFF.md) | Developer onboarding, local validation, invariants and acceptance backlog |
+| [Field launch handoff](docs/FIELD_RUN_2026-11-05.md) | Planned seven-day Wi-Fi run; installation, preflight and daily export checklist |
+| [Operations handoff](docs/OPERATIONS_HANDOFF.md) | Operator checks, incident triage, data preservation and transfer checklist |
+| [Firmware guide](firmware/coop_monitor/README.md) and [wiring](firmware/coop_monitor/WIRING.md) | Build, USB update, provisioning, calibration and hardware |
+| [Backend guide](cloud/coop-monitor-worker/README.md) | Dashboard capabilities and local toolchain |
+| [API](cloud/coop-monitor-worker/API.md) and [device contract](cloud/coop-monitor-worker/FIRMWARE_HANDOFF.md) | Routes, pagination, retries, commands and settings |
+| [Cloud operations](cloud/coop-monitor-worker/OPERATIONS.md) | Capacity estimates, archival, backup/recovery and credentials |
+| [Verification](VERIFICATION.md) and [deployment record](cloud/coop-monitor-worker/DEPLOYMENT.md) | Dated evidence; historical results are not current uptime |
+| [Migration map](CLOUD_MIGRATION_PLAN.md) and [project history](docs/PROJECT_HISTORY.md) | Implementation migration and preserved earlier decisions |
 
-The Cloudflare backend was deployed and checked with synthetic fixtures on 10 October 2026. Firmware `cloudflare-1.0.1` is now installed on the physical ESP32-C3, with retained calibration/Wi-Fi settings and real sensor readings verified in the backend and dashboard. Uploads continue with Serial Monitor closed. Longer field operation, warning behavior and fault recovery remain separate acceptance work; see [verification](VERIFICATION.md).
+Configured dashboard: [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/). Owner sign-in and device provisioning use separate private credentials. Their file roles are documented in the [operations handoff](docs/OPERATIONS_HANDOFF.md); credentials are excluded from Git.
+
+## Verification boundary
+
+Latest recorded evidence: 1 November multipart-CSV Worker rollout; 3 November firmware 1.0.4 upload; 4 November replacement-sensor and closed-lid tests, each 180 consecutive readings with zero retries/final failures. The last applied interval was five seconds, revision 4; replacement MQ calibration remains missing. The planned 5 November field launch and fresh persisted uploads remain unverified. This documentation-only refresh performed no runtime, production or device checks; historical test results and remaining acceptance are in [verification](VERIFICATION.md) and the [project handoff](docs/PROJECT_HANDOFF.md).
 
 ## Historical implementations
 
-`codex/quicktest` retains the 15/30-minute offline field-session workflow and manual Google Sheets upload. `codex/wifi-cloud` retains the earlier continuous Apps Script uploader. Commit `09aff6a` retains the original MicroSD monitor. Their source and dated verification records remain available; existing Google Sheet data and Apps Script deployment were preserved.
+The recorded `codex/quicktest` and `codex/wifi-cloud` workflows used offline field sessions/manual Google Sheets upload and continuous Apps Script uploading respectively. Commit `09aff6a` preserves the original MicroSD monitor. Historical data/source remain separate from the active Cloudflare runtime. SHT31, SD logging and those Apps Script workflows are not current integrated-monitor requirements.

@@ -1,0 +1,22 @@
+Week 1 sensor plots
+
+Coverage: 16 Oct 2026 10:02 – 23 Oct 2026 19:30 WIB
+Source records: 127,719
+Unique readings plotted: 127,719
+Duplicate identities removed: 0
+Conflicting duplicates: 0
+Rows with invalid timestamps excluded: 0
+Gaps over 60 seconds: 0
+
+Files:
+  coop-readings (1).csv: 41,599 rows
+  coop-readings (2).csv: 34,547 rows
+  coop-readings (3).csv: 34,547 rows
+  coop-readings (4).csv: 17,026 rows
+
+Plots use five-minute medians. Empty five-minute bins break lines; short gaps within bins may not be visible. Values are not interpolated. Individual short spikes may be smoothed.
+Time is converted from sampledAt UTC to Asia/Jakarta (WIB).
+MQ-135 values are divided ADC input millivolts; the threshold is the recorded configuration threshold, not a calibrated ammonia concentration. A threshold crossing alone does not establish device warning state.
+
+Largest gaps over 60 seconds:
+  None
