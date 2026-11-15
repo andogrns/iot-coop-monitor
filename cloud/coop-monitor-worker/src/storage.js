@@ -120,11 +120,15 @@ export async function snapshot(env) {
   for (const d of devices) {
     const block = await stmt(env.DB, 'SELECT * FROM reading_windows WHERE device_id=? AND state_json IS NOT NULL ORDER BY block_id DESC LIMIT 1', d.device_id).first();
     const state = block ? JSON.parse(block.state_json) : null;
+    // Recent restarts with the firmware's one-per-boot "BOOT ..." log line, if it sent one.
+    const boots = (await stmt(env.DB, `SELECT b.boot_id,b.anchor_ms,(SELECT l.message FROM device_logs l WHERE l.device_id=b.device_id AND l.boot_id=b.boot_id AND l.message LIKE 'BOOT %' ORDER BY l.seq LIMIT 1) AS boot_message
+      FROM boot_sessions b WHERE b.device_id=? ORDER BY b.anchor_ms DESC LIMIT 8`, d.device_id).all()).results
+      .map(b => ({ bootId: b.boot_id, startedAt: iso(b.anchor_ms), message: b.boot_message ?? null }));
     let sampleBlock = block, tuples = block ? JSON.parse(block.data_json) : [];
     if (block && !tuples.length) { sampleBlock = await stmt(env.DB, "SELECT * FROM reading_windows WHERE device_id=? AND data_json<>'[]' ORDER BY block_id DESC LIMIT 1", d.device_id).first(); tuples = sampleBlock ? JSON.parse(sampleBlock.data_json) : []; }
     views.push({ deviceId: d.device_id, label: d.label, state, stale: !state || Date.now() - Date.parse(state.receivedAt) > 15000,
       latestReading: tuples.length ? unpackSample(tuples[tuples.length - 1], d.device_id, sampleBlock.boot_id, sampleBlock.anchor_ms) : null,
-      desiredConfig: { revision: d.desired_config_revision, settings: JSON.parse(d.desired_config_json) }, writesPaused: d.writes_paused === 1 });
+      desiredConfig: { revision: d.desired_config_revision, settings: JSON.parse(d.desired_config_json) }, writesPaused: d.writes_paused === 1, recentBoots: boots });
   }
   const maintenance = await stmt(env.DB, 'SELECT value_json FROM system_state WHERE key=?', 'maintenance').first();
   return { devices: views, capacity: await capacity(env), maintenance: maintenance ? JSON.parse(maintenance.value_json) : null, serverTime: iso(Date.now()) };

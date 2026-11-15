@@ -18,21 +18,22 @@ function part(db, n, archiveId = null, hour = '2026-10-10T03:00:00.000Z', owner 
 }
 const url = (path, params = {}) => new URL('https://test/' + path + '?' + new URLSearchParams({ deviceId, ...params }));
 
-test('a manual archive is one folder with range/date/totals, distinct from duplicate labels and automatic hourly groups', async t => {
+test('a manual archive is one folder with range/date/totals, distinct from duplicate labels and automatic daily groups', async t => {
   const { env, db, queries } = await fixture(t);
   job(db, 'home'); for (let n = 1; n <= 19; n++) part(db, n, 'home', '2026-10-10T03:00:00.000Z', deviceId, n === 19 ? 46 : 120);
   job(db, 'duplicate'); part(db, 30, 'duplicate'); job(db, 'running', 'Pending <coop>', 'running');
   part(db, 40); part(db, 41); part(db, 42, null, '2026-10-10T04:00:00.000Z');
   const before = db.prepare('SELECT total_changes() AS n').get().n; queries.length = 0;
   const result = await archiveFolders(env, url('api/archive-folders'));
-  assert.equal(result.folders.length, 5); assert.equal(result.nextCursor, null);
+  assert.equal(result.folders.length, 4); assert.equal(result.nextCursor, null);
   const home = result.folders.find(f => f.folder_id === 'manual:home');
   assert.equal(home.file_count, 19); assert.equal(home.sample_count, 2206); assert.equal(home.label, 'Home Testing Session');
   assert.equal(home.range_from, '2026-10-10T03:47:00.000Z'); assert.equal(home.range_to, '2026-10-13T04:47:00.000Z'); assert.equal(home.archived_at, time(500));
   assert.equal(result.folders.filter(f => f.label === 'Home Testing Session').length, 2);
   assert.equal(result.folders.find(f => f.folder_id === 'manual:running').file_count, 0);
-  const auto = result.folders.find(f => f.folder_id === 'auto:2026-10-10T03:00:00.000Z');
-  assert.equal(auto.file_count, 2); assert.equal(auto.range_to, '2026-10-10T04:00:00.000Z'); assert.equal(auto.archived_at, time(41));
+  const auto = result.folders.find(f => f.folder_id === 'auto:2026-10-10T00:00:00.000Z');
+  assert.equal(auto.file_count, 3); assert.equal(auto.sample_count, 360); assert.equal(auto.label, 'Automatic archive 2026-10-10 (UTC)');
+  assert.equal(auto.range_from, '2026-10-10T00:00:00.000Z'); assert.equal(auto.range_to, '2026-10-11T00:00:00.000Z'); assert.equal(auto.archived_at, time(42));
   assert.equal(db.prepare('SELECT total_changes() AS n').get().n, before); assert.ok(queries.every(q => /^(SELECT|WITH)/i.test(q.trim())));
   const files = await archiveFiles(env, url('api/archive-files', { folder: home.folder_id }));
   assert.equal(files.files.length, 19); assert.deepEqual(files.files.map(f => f.created_at), Array.from({ length: 19 }, (_, i) => time(i + 1)));
@@ -65,15 +66,24 @@ test('file pagination returns every part once in save order and binds cursors to
   await assert.rejects(archiveFiles(env, url('api/archive-files', { folder: "manual:x';DELETE" })), e => e.status === 400);
 });
 
-test('automatic files remain isolated by hour and new routes retain owner-only, device-scoped reads', async t => {
-  const { env, db } = await fixture(t); part(db, 1); part(db, 2); part(db, 3, null, '2026-10-10T04:00:00.000Z');
-  const files = await archiveFiles(env, url('api/archive-files', { folder: 'auto:2026-10-10T03:00:00.000Z' })); assert.equal(files.files.length, 2);
+test('automatic files group by UTC day, stay isolated per day and new routes retain owner-only, device-scoped reads', async t => {
+  const { env, db } = await fixture(t);
+  part(db, 1); part(db, 2); part(db, 3, null, '2026-10-10T04:00:00.000Z'); part(db, 4, null, '2026-10-10T23:00:00.000Z');
+  part(db, 5, null, '2026-10-11T00:00:00.000Z'); part(db, 6, null, '2026-10-11T05:00:00.000Z');
+  const folders = (await archiveFolders(env, url('api/archive-folders'))).folders;
+  assert.deepEqual(folders.map(f => [f.folder_id, f.file_count]), [['auto:2026-10-11T00:00:00.000Z', 2], ['auto:2026-10-10T00:00:00.000Z', 4]]);
+  const files = await archiveFiles(env, url('api/archive-files', { folder: 'auto:2026-10-10T00:00:00.000Z' }));
+  assert.deepEqual(files.files.map(f => f.created_at), [1, 2, 3, 4].map(time));
+  assert.deepEqual((await archiveFiles(env, url('api/archive-files', { folder: 'auto:2026-10-11T00:00:00.000Z' }))).files.map(f => f.created_at), [5, 6].map(time));
+  // Old hourly folder IDs are no longer valid; a stale page must reload the folder list.
+  await assert.rejects(archiveFiles(env, url('api/archive-files', { folder: 'auto:2026-10-10T03:00:00.000Z' })), e => e.status === 400);
+  await assert.rejects(archiveFiles(env, url('api/archive-files', { folder: 'auto:2026-10-12T00:00:00.000Z' })), e => e.status === 404);
   const foldersPath = '/api/archive-folders?' + new URLSearchParams({ deviceId });
-  const filesPath = '/api/archive-files?' + new URLSearchParams({ deviceId, folder: 'auto:2026-10-10T03:00:00.000Z' });
+  const filesPath = '/api/archive-files?' + new URLSearchParams({ deviceId, folder: 'auto:2026-10-10T00:00:00.000Z' });
   for (const path of [foldersPath, filesPath]) {
     assert.equal((await app.fetch(request(path), env)).status, 200);
     for (const token of [null, deviceToken]) assert.equal((await app.fetch(request(path, { token }), env)).status, 401);
   }
   assert.equal((await archiveFolders(env, url('api/archive-folders', { deviceId: 'other' }))).folders.length, 0);
-  await assert.rejects(archiveFiles(env, url('api/archive-files', { deviceId: 'other', folder: 'auto:2026-10-10T03:00:00.000Z' })), e => e.status === 404);
+  await assert.rejects(archiveFiles(env, url('api/archive-files', { deviceId: 'other', folder: 'auto:2026-10-10T00:00:00.000Z' })), e => e.status === 404);
 });

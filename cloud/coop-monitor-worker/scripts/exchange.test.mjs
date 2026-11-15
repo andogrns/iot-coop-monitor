@@ -110,3 +110,24 @@ test('optimistic reading conflict rolls back then retries without losing either 
   assert.equal((await post(env, payload({ readings: [reading(3, 9500)] }))).status, 200);
   assert.deepEqual((await stored(env)).readings.map(r => r.seq).sort(), [1, 2, 3]);
 });
+
+test('SD card commands queue, reach the device unchanged and accept a multi-line result', async t => {
+  const { env } = await fixture(t);
+  for (const type of ['SD_STATUS', 'SD_TAIL', 'SD_FLUSH', 'SD_EJECT', 'SD_MOUNT']) {
+    const response = await app.fetch(request(`/api/devices/${deviceId}/commands`, { method: 'POST', value: { type, args: {}, ttlSec: 60 } }), env);
+    assert.equal(response.status, 201, type);
+  }
+  const rejected = await app.fetch(request(`/api/devices/${deviceId}/commands`, { method: 'POST', value: { type: 'SD_TAIL', args: { bytes: 4096 } } }), env);
+  assert.equal(rejected.status, 400);
+  // Readings in the same exchange are stored and acknowledged as usual while SD commands are pending.
+  const exchange = (await post(env, payload({ readings: [reading(1, 8000), reading(2, 10000)] }))).value;
+  assert.equal(exchange.acked.readings.length, 2);
+  assert.deepEqual(exchange.rejected.readings, []);
+  const delivered = exchange.commands;
+  assert.deepEqual(delivered.map(c => [c.type, c.args]), ['SD_STATUS', 'SD_TAIL', 'SD_FLUSH', 'SD_EJECT', 'SD_MOUNT'].map(type => [type, {}]));
+  const tail = delivered[1], message = '/coop/b00007.csv, newest complete lines on the card:\nR,2026-11-15T10:00:00Z,900,180,1100,2200,0.5000,695.5,27.10,61.20,27.40,1009.10,4,"OK"\n';
+  const result = await post(env, payload({ readings: [], commandResults: [{ id: tail.id, status: 'completed', message }] }));
+  assert.deepEqual(result.value.acked.commandResults, [tail.id]);
+  const history = await (await app.fetch(request(`/api/devices/${deviceId}/commands`), env)).json();
+  assert.equal(history.commands.find(c => c.id === tail.id).result.message, message);
+});

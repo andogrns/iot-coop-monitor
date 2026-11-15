@@ -12,10 +12,11 @@
   "secrets": { "required": ["ADMIN_TOKEN", "SESSION_SECRET"] },
   "vars": {
     "RETENTION_DAYS": "30", "DB_MAX_BYTES": "500000000", "ARCHIVE_MAX_BYTES": "10000000000",
-    "D1_DAILY_WRITE_LIMIT": "100000", "WORKER_DAILY_REQUEST_LIMIT": "100000", "DASHBOARD_DAILY_REQUEST_RESERVE": "21600"
+    "D1_DAILY_WRITE_LIMIT": "100000", "WORKER_DAILY_REQUEST_LIMIT": "100000", "DASHBOARD_DAILY_REQUEST_RESERVE": "21600",
+    "GAS_ALERT_AFTER_MINUTES": "60"
   },
   "assets": { "directory": "public", "binding": "ASSETS", "run_worker_first": true },
-  "triggers": { "crons": ["*/15 * * * *"] },
+  "triggers": { "crons": ["*/15 * * * *", "*/5 * * * *"] },
   "r2_buckets": [{ "binding": "ARCHIVES", "bucket_name": "coop-monitor-archives" }],
   "d1_databases": [
     {

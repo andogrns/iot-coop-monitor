@@ -1,22 +1,26 @@
 # Coop Monitor backend
 
-Security/efficiency audit: [12 October 2026 report](../../docs/BACKEND_AUDIT_2026-10-12.md). Compatible fixes and the additive archive catalog index are **deployed** as Worker `c57d5a65-0e42-483c-a2dd-04433b0858c3`. Nine production synthetic checks passed and the fixture was removed. The real ESP32 was already offline before rollout; fresh physical ingestion remains pending. Run `npm test` (Node with `node:sqlite`) for 38 local tests; `node scripts/local-runtime-smoke.mjs` runs 20 isolated Worker checks with the installed Wrangler toolchain and synthetic local-only data. Neither local test command reads production credentials. Firmware-sensitive findings remain pending review.
+Source/documentation reviewed **5 November 2026 (Asia/Jakarta)**. Cloudflare Worker with a private Signal owner dashboard, authenticated ESP32 exchange, D1 recent history, settings/commands and private R2 archives. See the [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md).
 
-Cloudflare Worker with a private owner dashboard, authenticated ESP32 device exchange, D1 recent history, remote settings/commands, and private R2 archives. Deployed 10 October 2026. Physical device `coop-monitor-01` now runs `cloudflare-1.0.1`; real sensor ingestion and dashboard display are verified. Extended device acceptance remains in [root verification](../../VERIFICATION.md).
+The latest recorded rollout is **1 November**, Worker `ae9536c7-60fa-475e-8fe5-e07da01ecdb1` (multipart History CSV exports). Each part contains at most 50,000 readings; cursor retrieval continues for the full selection, with manual links and incomplete-export reporting. Source firmware is `cloudflare-1.0.4`; the latest short sensor checks are dated 4 November. This refresh did not query production or the device. Authenticated browser download acceptance and field-network History persistence remain unverified. See [deployment record](DEPLOYMENT.md) and [root verification](../../VERIFICATION.md).
+
+On 22 October, `npm test` passed **82 local tests** with Node v24.19.0 (`node:sqlite` required). `node scripts/local-runtime-smoke.mjs` passed **50 isolated Worker checks** using installed Wrangler/esbuild/Miniflare, synthetic credentials and local D1/R2. Neither command reads production credentials. The [12 October audit](../../docs/BACKEND_AUDIT_2026-10-12.md) records compatible deployed fixes and firmware-sensitive findings that remain unresolved.
 
 ## Open the dashboard
 
-The approved **Signal** redesign is deployed as `8d50edc6-b376-44dd-bd48-dd06a29c9d40` (12 October 2026), retaining the audit backend above. Select a metric tile and **1h, 6h, 12h or 24h** to view recent trends. A slider/pointer inspects exact loaded readings; display reduction retains extrema and does not modify stored samples. Empty windows stay empty even when older readings are available in History. Full calibration and capacity information remains in expandable details.
+The implemented **Signal** dashboard provides selectable metric tiles and **1h, 6h, 12h or 24h** recent trends. A slider/pointer inspects exact loaded readings; display reduction retains extrema and does not modify stored samples. Empty windows stay empty even when older readings are available in History. Full calibration and capacity information remains in expandable details.
 
-Trend ranges load all required existing history pages (60 minute blocks per request), then update at most once per minute while Overview is visible, overlapping two minutes to catch recent retries. **Refresh trend** reloads the complete window, including any older late arrivals. Switching ranges also loads the complete selected window; metric switching is local. These reads add to dashboard requests and D1 reads. A 24-hour load at a steady cadence generally uses about 24–25 pages; boot overlaps can add pages. Requests are bounded at 120 pages/100,000 incoming readings and show an error rather than a partial graph. No extra backend endpoint or scheduled job is installed. Run `npm test` for the current **46** local tests.
+Trend ranges load all required existing history pages (60 minute blocks per request), then update at most once per minute while Overview is visible, overlapping two minutes to catch recent retries. **Refresh trend** reloads the complete window, including older late arrivals. Switching ranges also loads the complete selected window; metric switching is local. These reads add dashboard requests and D1 reads. A 24-hour load at a steady cadence generally uses about 24–25 pages; boot overlaps can add pages. Requests are bounded at 120 pages/100,000 incoming readings and show an error rather than a partial graph. No extra backend endpoint or scheduled job is installed.
 
 [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev)
 
 Sign in using `ownerKey` from the ignored `.credentials.local.json` beside this README. That key stays on this computer and the Worker secret store; it is not embedded in public assets. Owner sessions last 8 hours. Device tokens cannot open owner APIs.
 
-Provisioned device: `coop-monitor-01`. The ignored `../../firmware/coop_monitor/dashboard.local.json` contains its ID, HTTPS exchange endpoint and device token. The connected device already has these settings. Use the [firmware guide](../../firmware/coop_monitor/README.md) for future USB updates or Wi-Fi changes. No new bucket or database is required.
+Configured device: `coop-monitor-01`. The ignored `../../firmware/coop_monitor/dashboard.local.json` is its ID/HTTPS endpoint/token provisioning file; it was not read during this refresh. Provisioning was recorded previously, but present device settings require authorized readback. Use the [firmware guide](../../firmware/coop_monitor/README.md) for USB updates or Wi-Fi changes. Reuse the existing bucket/database.
 
-## Resources created
+## Configured resources
+
+Names/bindings are source-confirmed; region/private-access observations retain the dates in [DEPLOYMENT.md](DEPLOYMENT.md).
 
 | Resource | Configuration |
 |---|---|
@@ -37,11 +41,11 @@ You do not need to create another database or bucket. R2 public access, custom d
 - Settings use revision checks, server validation and separate device-applied status.
 - Older readings move to compressed, checksum-verified private R2 chunks. Database source is removed only after complete readback verification. Archives have no automatic deletion policy.
 - Archives also provides From/To pickers, an automatically refreshed selected-entry count and a required label. **Create archive** moves only the chosen readings after verified storage; large ranges become multiple files inside one folder-style entry. Each entry shows its label, range and archive date. Open it for individual files, **Download all files** or checkbox selection plus **Download selected**. Bulk downloads produce one ZIP containing the original `.json.gz` files, verified against their stored SHA-256; ZIP creation happens in the browser. **Download all** follows every file page, while **Select all loaded files** selects the visible batch. Duplicate labels remain separate archive IDs; automatic files are grouped by hour. Keep the page open while archiving runs, or open an unfinished folder and use **Continue archiving** after interruption. Ranges use the History timeline and browser timezone, inclusive endpoints, up to 31 days. Manually archived sample fingerprints preserve firmware retry/conflict behavior until normal retention clears the blocks.
-- Warnings at 80% and data-write pause near 95% of application budgets. See operations for the limits of application estimates and account-wide billing.
+- Storage/estimated-write warnings near 80%; data-write pauses near 95% also include estimated requests. A request-only pause can lack an earlier warning. See operations/audit for incomplete accounting and account-wide billing limits.
 
 ## PowerShell commands
 
-`cf.ps1` uses installed Node or the bundled runtime and sets PATH, addressing the earlier `node`/`pnpm` shell errors.
+`cf.ps1` uses installed Node or the bundled runtime and sets PATH. Wrangler is pinned at 4.148.0. If Windows blocks scripts, invoke a helper with `powershell.exe -NoProfile -ExecutionPolicy Bypass -File './cf.ps1' --version` (or the authorized arguments); the override is process-only. Do not change global execution policy. Account commands below require authorized account access; the version check is local.
 
 ```powershell
 Set-Location 'C:\Users\Ando\Documents\Ando\bleh\Enrichment 2\cloud\coop-monitor-worker'
@@ -68,11 +72,12 @@ The manual-archive feature requires migration `0004_manual_archives.sql` before 
 .\cf.ps1 deploy --secrets-file .secrets.production.json
 ```
 
-Use `node scripts/prepare-credentials.mjs <Worker URL>` to regenerate derived provisioning files from existing credentials. Use `node scripts/smoke.mjs <Worker URL>` for deployment acceptance with an isolated synthetic device and explicit fixture cleanup. Keep `.local` reports/backups private. See `OPERATIONS.md` before changing credentials or restoring data.
+For authorized provisioning/deployment, `node scripts/prepare-credentials.mjs <Worker URL>` regenerates derived files from existing credentials; it does not rotate them. `node scripts/smoke.mjs <Worker URL>` is **production-writing acceptance**, using a disposable synthetic device and explicit fixture cleanup. It is distinct from the local-only `local-runtime-smoke.mjs`; do not run it merely to refresh documentation. Keep `.local` reports/backups private. See [OPERATIONS.md](OPERATIONS.md) before credentials or restore work.
 
 ## Documentation
 
-- `DEPLOYMENT.md`: live account/resource names and deployment version.
+- [Project context](../../PROJECT_CONTEXT.md), [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md), [operations handoff](../../docs/OPERATIONS_HANDOFF.md): current source setup and transfer guides.
+- `DEPLOYMENT.md`: dated account/resource observations and recorded deployment version.
 - `VERIFICATION.md`: actual acceptance evidence and hardware boundaries.
 - `FIRMWARE_HANDOFF.md`: device payload, retries, settings and command rules.
 - `API.md`: owner endpoints and pagination.

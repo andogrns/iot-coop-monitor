@@ -1,5 +1,13 @@
 # Backend verification
 
+## Documentation and local baseline — 22 October 2026
+
+Source/contract/documentation review only, with **82/82 Node tests** and **50/50 isolated workerd/Miniflare checks** passing on Node v24.19.0. The latter uses synthetic credentials, local D1/R2 and disabled outbound service. Wrangler 4.148.0 was checked locally with the process-only execution-policy override documented in the handoff. No production credentials, account or endpoint was accessed; no cloud/device writes, migration, deployment or Git publication occurred.
+
+All 16 active Worker/browser JavaScript files passed syntax checks. Across the documentation refresh, 194 local links in 16 changed/new Markdown files resolved; diff whitespace checks passed. External links were not fetched.
+
+Updated backend entry/API/device/operations/deployment documentation and linked the [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md). The 13 October version below remains the **last recorded rollout**, not a new live check. Known deferred findings and physical/field acceptance remain unresolved. Root [verification](../../VERIFICATION.md) records the documentation scope.
+
 ## Archive folders and ZIP downloads — 13 October 2026, deployed
 
 Archive library entries group manual IDs and automatic hours with range/archive-date metadata, lazy file pages, checkbox selection and all/selected ZIP downloads of SHA-256-verified original files. New owner-only GET `/api/archive-folders` and `/api/archive-files` use existing tables and scoped cursors; old catalog/download and firmware/archiving contracts remain unchanged. **82 Node tests**, **50 isolated Worker checks**, synthetic desktop/mobile browser checks, and independent 19-file/2-file/105-file synthetic ZIP decoding passed. After fresh user approval, published **`d19d670b-57b4-4108-be5f-ed7ca5b35c32`**; all **nine asset hashes** matched. Live Home Testing Session appeared once with correct metadata and 19 original files / 2,206 entries. Target job/manifest hash was preserved, full and two-selected-file ZIPs independently passed CRC/both SHA-256/gzip/count/unique-sample checks (2,206 / 1,245 entries), and private/device/cursor access checks passed.

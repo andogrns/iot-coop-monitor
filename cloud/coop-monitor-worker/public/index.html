@@ -1,37 +1,271 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark"><title>Coop Monitor</title><link rel="stylesheet" href="/style.css?v=2f157e790ea6"><script type="module" src="/app.js?v=ebcd7853430a"></script></head>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Coop Monitor</title>
+<link rel="stylesheet" href="/style.css?v=d9d1320c074d">
+<link rel="stylesheet" href="/history.css?v=313f412b462e">
+<link rel="stylesheet" href="/console.css?v=60e8402d0b30">
+<link rel="stylesheet" href="/archives.css?v=fa4b9c5a154a">
+<script type="module" src="/app.js?v=0235b786e619"></script>
+</head>
 <body>
-<header class="app-header"><a class="brand" href="/" aria-label="Coop Monitor home"><span class="brand-mark" aria-hidden="true"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-9M7 21h10M12 16C5 16 3 12 3 8c5 0 9 2 9 8ZM12 12c0-6 3-9 9-9 0 6-3 9-9 9Z"/></svg></span><span>Coop Monitor<small>ENVIRONMENTAL MONITOR</small></span></a><nav id="navigation" aria-label="Dashboard sections" hidden><button data-tab="overview" class="selected" aria-current="page">Overview</button><button data-tab="history">History</button><button data-tab="console">Console</button><button data-tab="settings">Settings</button><button data-tab="archives">Archives</button></nav><button id="logout" class="quiet" hidden>Sign out</button></header>
+<header class="app-header">
+  <a class="brand" href="#overview" aria-label="Coop Monitor overview">
+    <span class="brand-mark" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21v-9M7 21h10M12 16C5 16 3 12 3 8c5 0 9 2 9 8ZM12 12c0-6 3-9 9-9 0 6-3 9-9 9Z"/></svg></span>
+    <span class="brand-name">Coop Monitor</span>
+  </a>
+  <nav id="navigation" class="tabs" aria-label="Dashboard sections" hidden>
+    <a href="#overview" data-tab="overview" aria-current="page">Overview</a>
+    <a href="#history" data-tab="history">History</a>
+    <a href="#console" data-tab="console">Console</a>
+    <a href="#settings" data-tab="settings">Settings</a>
+    <a href="#archives" data-tab="archives">Archives</a>
+  </nav>
+  <div id="device-area" class="header-device" hidden>
+    <label for="device" class="visually-hidden">Device</label>
+    <select id="device" title="Choose a device"></select>
+    <span id="device-name" class="device-name" hidden></span>
+  </div>
+  <button id="logout" class="quiet small" hidden>Sign out</button>
+</header>
 <main>
-<section id="login" class="card login-card"><p class="eyebrow">PRIVATE WORKSPACE</p><h1>Welcome to your coop.</h1><p>Sign in to view readings and manage your monitor.</p><form id="login-form"><label>Owner key<input id="owner-key" type="password" required autocomplete="current-password"></label><button class="primary">Sign in</button></form></section>
-<p id="notice" role="status" aria-live="polite"></p>
-<div id="dashboard" hidden>
-<div class="workspace-bar"><label class="device-picker">Device<select id="device"></select></label><span class="private-label">PRIVATE WORKSPACE</span></div>
-<div class="page-heading"><div><p class="eyebrow">MONITORING WORKSPACE</p><h1 id="page-title">Environment Readings</h1><p id="page-description">Current readings and recent environmental trends.</p></div><span id="freshness" class="status-badge">Waiting for firmware</span></div>
-<section id="overview" class="tab" aria-label="Overview">
-<div id="readings" class="metrics" aria-label="Select a trend metric"></div>
-<div class="overview-layout">
-<article class="card trend-card"><div class="card-heading"><div><h2 id="trend-title">Gas response trend</h2><p id="trend-subtitle" class="small">Divided ADC input · mV</p></div><div id="trend-ranges" class="range-buttons" aria-label="Trend time range"><button data-hours="1" class="selected" aria-pressed="true">1h</button><button data-hours="6" aria-pressed="false">6h</button><button data-hours="12" aria-pressed="false">12h</button><button data-hours="24" aria-pressed="false">24h</button></div></div>
-<p id="trend-status" class="small" role="status" aria-live="polite">Select a device to load trends.</p><div id="trend-chart" class="chart-wrap"><svg id="trend-svg" role="img" aria-label="Environmental trend"></svg><p id="trend-empty" hidden></p></div><div class="trend-inspector"><label for="trend-scrub">Inspect reading</label><output id="trend-detail" for="trend-scrub">No reading selected</output><input id="trend-scrub" type="range" min="0" max="0" value="0" disabled></div><div class="trend-footer"><span id="trend-window" class="small"></span><button id="trend-refresh" class="quiet">Refresh trend</button></div></article>
-<aside class="overview-aside">
-<article class="card" data-calibration-panel><div class="card-heading"><h2>Calibration</h2><span class="small">Read only</span></div><p class="small" data-calibration-status>No device report yet.</p><dl class="calibration-values" data-calibration-values></dl><details class="explanation"><summary>How thresholds work</summary><p class="small">Automatic threshold uses the higher of baseline +15% or baseline +3 standard deviations. The active threshold is from the last matching device reading. Reference temperature and humidity were recorded during calibration.</p></details></article>
-<article class="card"><div class="card-heading"><h2>Storage & uploads</h2><span id="capacity-percent" class="small"></span></div><meter id="capacity-meter" min="0" max="100" low="80" high="95" optimum="0" aria-label="Database capacity used"></meter><div id="capacity"></div><button id="pause">Pause uploads</button><details class="explanation"><summary>Capacity details & policy</summary><p id="capacity-details" class="small"></p><p class="small">Warnings at 80%; new data writes pause near 95%. Figures cover this application. Check account usage in Cloudflare.</p></details></article>
-</aside></div>
-<details class="card device-details"><summary>Device state <span class="small">Firmware, connection and diagnostics</span></summary><pre id="state">No device exchange yet.</pre></details>
+<section id="loading" class="loading-state" aria-live="polite">
+  <span class="spinner" aria-hidden="true"></span>
+  <p id="loading-text">Loading your coop…</p>
 </section>
-<section id="history" class="tab" aria-label="History" hidden><article class="card"><div class="card-heading"><h2>Recent history</h2><span class="small">30 days searchable</span></div><form id="history-form" class="toolbar"><label>From<input id="from" type="datetime-local" required></label><label>To<input id="to" type="datetime-local" required></label><button class="primary">Load selected range</button></form><p id="history-selection-count" role="status" aria-live="polite">Choose a range to count selected entries.</p><p class="small">Opening History loads recent readings. Choose newest or oldest first and 50–1,000 entries per page below (defaults: newest first, 100). Times use your browser timezone. Estimated times use server-anchored uptime; device UTC stays unknown until synchronized.</p><div class="card-heading"><p id="history-count" role="status" aria-live="polite"></p><button id="export">Download selected range as CSV</button></div><div class="table-wrap"><table><thead><tr><th>No.</th><th>Time</th><th>MQ mV</th><th>Ratio</th><th>Temperature °C</th><th>Humidity %</th><th>Pressure hPa</th><th>Status</th></tr></thead><tbody id="history-rows"></tbody></table></div><div class="history-pagination"><button id="more-history" hidden>Load next page</button><div class="history-page-control"><label for="history-page-size">Entries per page</label><select id="history-page-size"><option value="50">50</option><option value="100" selected>100</option><option value="250">250</option><option value="500">500</option><option value="1000">1,000</option></select></div><div class="history-order-control"><label for="history-order">Order</label><select id="history-order"><option value="desc" selected>Newest first</option><option value="asc">Oldest first</option></select></div></div><p class="small">Load next page adds the next batch in the selected order. Changing the page size or order reloads the current view.</p></article></section>
-<section id="console" class="tab" aria-label="Console" hidden><div class="grid two"><article class="card"><h2>Send a command</h2><form id="command-form"><label>Command<select id="command"><option>CAL_SHOW</option><option>CAL_EXPORT</option><option>CAL_START</option><option>CAL_CANCEL</option><option>NET_STATUS</option><option>NET_RECONNECT</option><option>CONFIG_SHOW</option><option>RESTART</option><option>HELP</option></select></label><label id="cal-confirm-label" class="check-label" hidden><input id="cal-confirm" type="checkbox"> Device is stabilized in known reference conditions.</label><button class="primary">Queue command</button></form><p class="small">Commands expire after 60 seconds if execution has not started. Receipts show actual firmware reports. Network reconnect and restart may interrupt uploads.</p><pre id="commands"></pre></article><article id="firmware-logs" class="card"><h2>Firmware logs</h2><p class="small">24 hours retained. Maximum 60 new messages per hour per device.</p><pre id="logs"></pre></article></div></section>
-<section id="settings" class="tab" aria-label="Settings" hidden><div class="grid two"><article class="card"><h2>Monitoring settings</h2><p id="config-status" class="config-status"></p><form id="settings-form"><label>MQ threshold mode<select id="threshold-mode"><option value="automatic">Automatic: baseline +15% or +3 SD</option><option value="manual">Manual</option></select></label><label>Manual threshold (mV)<input id="manual-threshold" type="number" min="10" max="2399" placeholder="Inactive in automatic mode"></label><div class="grid two"><label>Consecutive warning samples<input id="consecutive" type="number" min="1" max="10" required></label><label>Sampling interval (seconds)<input id="sample-interval" type="number" min="2" max="60" required></label></div><p id="confirmation-time" class="small"></p><button class="primary">Save desired settings</button></form><p class="small">Firmware must apply and report the revision. Manual thresholds retain warm-up, calibration and sensor-error guards.</p></article><article class="card" data-calibration-panel><div class="card-heading"><h2>Current calibration</h2><span class="small">Read only</span></div><p class="small" data-calibration-status>No device report yet.</p><dl class="calibration-values" data-calibration-values></dl><p class="small">Use baseline × your chosen multiplier to calculate a manual threshold in mV. For example, 800 mV × 1.25 = 1000 mV. Changing calibration does not rescale a saved manual threshold.</p></article></div></section>
+<section id="login" class="card login-card" hidden>
+  <h1>Sign in</h1>
+  <p>Enter your owner key to see your coop readings and manage the monitor.</p>
+  <form id="login-form">
+    <div class="field">
+      <label for="owner-key">Owner key</label>
+      <input id="owner-key" type="password" required autocomplete="current-password" aria-describedby="login-error">
+      <p id="login-error" class="field-error" role="alert"></p>
+    </div>
+    <button class="primary">Sign in</button>
+  </form>
+</section>
+<div id="dashboard" hidden>
+<div id="banners" class="banners"></div>
+<div class="page-heading">
+  <div class="page-title-block">
+    <h1 id="page-title">Overview</h1>
+    <p id="page-description">How your coop is doing right now.</p>
+  </div>
+  <div id="device-status" class="device-status">
+    <div class="device-status-badges" aria-live="polite">
+      <span id="connection-badge" class="badge muted">Checking…</span>
+      <span id="condition-badge" class="badge muted" hidden></span>
+    </div>
+    <span id="last-reading" class="small"></span>
+  </div>
+</div>
+<section id="overview" class="tab" aria-label="Overview">
+<div id="overview-empty" hidden></div>
+<div id="overview-content">
+<div id="readings" class="metrics" role="group" aria-label="Current readings (select one to chart it)"></div>
+<div class="overview-layout">
+<article class="card trend-card">
+  <div class="card-heading">
+    <div>
+      <h2 id="trend-title">Gas response trend</h2>
+      <p id="trend-subtitle" class="small">Relative gas response · mV</p>
+    </div>
+    <div id="trend-ranges" class="segmented" role="group" aria-label="Trend time range"><button data-hours="1" class="selected" aria-pressed="true">1h</button><button data-hours="6" aria-pressed="false">6h</button><button data-hours="12" aria-pressed="false">12h</button><button data-hours="24" aria-pressed="false">24h</button></div>
+  </div>
+  <div id="trend-chart" class="chart-wrap">
+    <svg id="trend-svg" role="img" aria-label="Environmental trend"></svg>
+    <div id="trend-tooltip" class="chart-tooltip" hidden></div>
+    <p id="trend-empty" class="chart-empty" hidden></p>
+  </div>
+  <div id="trend-legend" class="chart-legend" aria-hidden="true">
+    <span class="legend-item"><span class="legend-line"></span>Reading</span>
+    <span class="legend-item"><span class="legend-threshold"></span>Warning threshold</span>
+    <span class="legend-item"><span class="legend-warning"></span>Gas warning</span>
+  </div>
+  <p id="trend-status" class="small" role="status" aria-live="polite">Select a device to load trends.</p>
+  <div class="trend-inspector">
+    <label for="trend-scrub">Step through readings</label>
+    <input id="trend-scrub" type="range" min="0" max="0" value="0" disabled>
+    <output id="trend-detail" for="trend-scrub" class="small">No reading selected</output>
+  </div>
+  <div class="trend-footer">
+    <span id="trend-window" class="small"></span>
+    <button id="trend-refresh" class="quiet small">Refresh</button>
+  </div>
+</article>
+<aside class="overview-aside">
+<article class="card" data-calibration-panel>
+  <div class="card-heading"><h2>Calibration</h2></div>
+  <p class="small" data-calibration-status>No device report yet.</p>
+  <dl class="dl-grid" data-calibration-values></dl>
+  <details class="disclosure">
+    <summary>Details and how warnings work</summary>
+    <p class="small">The automatic warning threshold is the higher of baseline +15% or baseline +3 standard deviations. The threshold shown is the one the device used for its latest reading. Reference temperature and humidity were recorded during calibration.</p>
+    <dl class="dl-grid" data-calibration-extra></dl>
+  </details>
+</article>
+<article class="card" id="health-card">
+  <div class="card-heading"><h2>Device health</h2><span id="health-age" class="small"></span></div>
+  <p id="health-verdict" class="health-verdict"></p>
+  <p class="small" id="health-status">No health report yet. Firmware with diagnostics sends it.</p>
+  <dl class="dl-grid" id="health-values"></dl>
+  <details class="disclosure" id="health-more">
+    <summary>All diagnostics</summary>
+    <dl class="dl-grid" id="health-extra"></dl>
+  </details>
+  <details class="disclosure">
+    <summary>Recent restarts</summary>
+    <ul id="boot-list" class="plain-list"></ul>
+  </details>
+</article>
+<article class="card" id="storage-card">
+  <div class="card-heading"><h2>Storage &amp; uploads</h2><span id="upload-state" class="badge muted"></span></div>
+  <div class="usage">
+    <div class="usage-label"><span>Database</span><span id="db-usage-text" class="small"></span></div>
+    <div class="usage-bar" id="db-usage-bar" role="img"><span class="usage-fill"></span></div>
+  </div>
+  <div class="usage">
+    <div class="usage-label"><span>Archive storage</span><span id="archive-usage-text" class="small"></span></div>
+    <div class="usage-bar" id="archive-usage-bar" role="img"><span class="usage-fill"></span></div>
+  </div>
+  <p id="capacity" class="small"></p>
+  <button id="pause" class="small">Pause uploads</button>
+  <details class="disclosure">
+    <summary>Usage details and limits</summary>
+    <p id="capacity-details" class="small"></p>
+    <p class="small">A warning appears at 80% database use, and new data writes pause automatically near 95%. Figures cover this application only; check overall account usage in Cloudflare.</p>
+  </details>
+</article>
+</aside>
+</div>
+<details class="card disclosure technical-details">
+  <summary>Technical details <span class="small">Raw device state for troubleshooting</span></summary>
+  <pre id="state">No device exchange yet.</pre>
+</details>
+</div>
+</section>
+<section id="history" class="tab" aria-label="History" hidden>
+<article class="card history-card">
+  <div class="history-controls">
+    <div id="history-views" class="segmented history-views" role="group" aria-label="Readings to show">
+      <button type="button" data-view="latest" class="selected" aria-pressed="true">Latest</button>
+      <button type="button" data-view="1h" aria-pressed="false">Last hour</button>
+      <button type="button" data-view="24h" aria-pressed="false">Last 24 h</button>
+      <button type="button" data-view="7d" aria-pressed="false">Last 7 days</button>
+      <button type="button" data-view="custom" aria-pressed="false">Custom range</button>
+    </div>
+    <div class="history-options">
+      <div class="history-option">
+        <label for="history-order">Order</label>
+        <select id="history-order"><option value="desc" selected>Newest first</option><option value="asc">Oldest first</option></select>
+      </div>
+      <div class="history-option">
+        <label for="history-page-size">Rows per page</label>
+        <select id="history-page-size"><option value="50">50</option><option value="100" selected>100</option><option value="250">250</option><option value="500">500</option><option value="1000">1,000</option></select>
+      </div>
+    </div>
+  </div>
+  <form id="history-form" class="history-range" hidden novalidate>
+    <div class="field"><label for="from">From</label><input id="from" type="datetime-local" required></div>
+    <div class="field"><label for="to">To</label><input id="to" type="datetime-local" required></div>
+    <button class="primary">Apply</button>
+    <p id="history-range-error" class="field-error" role="alert"></p>
+    <p id="history-selection-count" class="small history-pending" role="status" aria-live="polite" hidden>Choose a range to count readings.</p>
+  </form>
+  <div class="history-summary-row">
+    <p id="history-count" class="history-summary" role="status" aria-live="polite"></p>
+    <button id="export" type="button">Export as CSV</button>
+  </div>
+  <p id="export-status" class="small history-export-status" role="status" aria-live="polite"></p>
+  <ul id="export-downloads" class="history-downloads" aria-label="CSV files from the last export"></ul>
+  <div id="history-empty" hidden></div>
+  <div id="history-table" class="table-wrap scroll-y history-table" hidden>
+    <table>
+      <thead><tr><th class="num history-no" scope="col" title="Position in time order among the rows shown (1 = oldest)">No.</th><th scope="col" class="history-time">Time</th><th class="num" scope="col">Gas response<span class="th-unit">mV</span></th><th class="num" scope="col" title="Gas response divided by the calibration baseline">Ratio<span class="th-unit">× baseline</span></th><th class="num" scope="col">Temperature<span class="th-unit">°C</span></th><th class="num" scope="col">Humidity<span class="th-unit">%</span></th><th class="num" scope="col">Pressure<span class="th-unit">hPa</span></th><th scope="col">Status</th></tr></thead>
+      <tbody id="history-rows"></tbody>
+    </table>
+  </div>
+  <div class="history-more">
+    <button id="more-history" hidden>Load more</button>
+    <span id="history-end" class="small"></span>
+  </div>
+  <details class="disclosure">
+    <summary>About times and ranges</summary>
+    <ul class="history-notes small">
+      <li>History keeps the last 30 days of readings. Older readings move to <a href="#archives">Archives</a> automatically.</li>
+      <li>Times are shown in your browser’s time zone, with dates as DD/MM/YYYY.</li>
+      <li><abbr class="history-est" title="Estimated time">est.</abbr> marks an estimated time: the monitor’s clock had not been set yet (for example just after a restart), so the time was worked out from how long it had been running. It may be off by a few seconds.</li>
+      <li>A custom range can cover up to 31 days. CSV exports contain every reading in the range, oldest first, split into files of up to 50,000 readings.</li>
+      <li>Gas response is the MQ-135 sensor’s relative response in millivolts, not an ammonia (ppm) measurement. Ratio compares it with the calibration baseline.</li>
+    </ul>
+  </details>
+</article>
+</section>
+<section id="console" class="tab" aria-label="Console" hidden>
+<div class="console-layout">
+<div class="console-main">
+<article class="card"><div class="card-heading"><h2>Send a command</h2><span class="small">The device replies within a few seconds</span></div>
+<form id="command-form" class="command-form">
+<select id="command" hidden aria-hidden="true" tabindex="-1"><option>CAL_SHOW</option><option>CAL_EXPORT</option><option>CAL_START</option><option>CAL_CANCEL</option><option>NET_STATUS</option><option>NET_RECONNECT</option><option>CONFIG_SHOW</option><option>RESTART</option><option>HELP</option><option>SD_STATUS</option><option>SD_TAIL</option><option>SD_FLUSH</option><option>SD_MOUNT</option><option>SD_EJECT</option></select>
+<div id="command-picker" class="command-picker"></div>
+<div id="cal-confirm-label" class="cal-confirm" hidden><label class="check-label"><input id="cal-confirm" type="checkbox" aria-describedby="cal-confirm-help cal-confirm-error"> The sensor has settled in known clean reference air</label><p id="cal-confirm-help" class="field-help">Required. Away from exhaust, smoke, alcohol and cleaners, with the temperature/humidity sensor working.</p><p id="cal-confirm-error" class="field-error" role="alert"></p></div>
+<p id="command-offline" class="command-offline" role="status" hidden></p>
+<div class="command-actions"><button id="command-send" class="primary">Send command</button><span class="small">A command the device has not started within 60 seconds expires without running.</span></div>
+</form>
+</article>
+<article class="card"><div class="card-heading"><h2>Command history</h2><span class="small">Newest first</span></div><ul id="commands" class="command-list" aria-live="polite"></ul></article>
+</div>
+<article id="firmware-logs" class="card"><div class="card-heading"><h2>Firmware logs</h2><div id="log-filter" class="segmented" role="group" aria-label="Show log lines"><button type="button" class="selected" aria-pressed="true" data-filter="all">All</button><button type="button" aria-pressed="false" data-filter="problems">Warnings and errors</button></div></div><p class="small">Messages from the device over the last 24 hours, newest at the bottom. Up to 60 messages per hour are kept for each device; any beyond that are not stored.</p><div id="logs" role="log" aria-label="Firmware log lines" tabindex="0"></div></article>
+</div>
+</section>
+<section id="settings" class="tab" aria-label="Settings" hidden>
+<div class="settings-layout">
+<article class="card settings-card"><div class="card-heading"><h2>Monitoring settings</h2><span id="settings-dirty" class="badge warn dot" hidden>Unsaved changes</span></div>
+<div id="config-status" class="sync-status muted" role="status" aria-live="polite"></div>
+<form id="settings-form" class="settings-form" novalidate>
+<fieldset class="settings-group"><legend>Gas warning threshold</legend>
+<select id="threshold-mode" hidden aria-hidden="true" tabindex="-1"><option value="automatic">Automatic</option><option value="manual">Manual</option></select>
+<div class="choice-cards">
+<label class="choice-card"><input type="radio" name="threshold-choice" value="automatic"><span class="choice-body"><span class="choice-title">Automatic</span><span class="choice-text">Set from the calibration: the higher of baseline +15 % or baseline + 3 standard deviations.</span></span></label>
+<label class="choice-card"><input type="radio" name="threshold-choice" value="manual"><span class="choice-body"><span class="choice-title">Manual</span><span class="choice-text">You choose a fixed value in mV. It does not change when you recalibrate.</span></span></label>
+</div>
+<div id="manual-field" class="field manual-field" hidden><label for="manual-threshold">Manual threshold (mV)</label><input id="manual-threshold" type="number" inputmode="numeric" min="10" max="2399" step="1" aria-describedby="manual-help manual-relative manual-error"><p id="manual-help" class="field-help">10–2399 mV, measured at the board’s divided sensor input (the same scale as the gas readings). This is a relative gas response, not ammonia ppm.</p><p id="manual-relative" class="field-help manual-relative" hidden></p><p id="manual-error" class="field-error" role="alert"></p></div>
+</fieldset>
+<fieldset class="settings-group"><legend>Timing</legend>
+<div class="field-row settings-row">
+<div class="field"><label for="consecutive">Readings in a row before a warning</label><input id="consecutive" type="number" inputmode="numeric" min="1" max="10" step="1" required aria-describedby="consecutive-help consecutive-error"><p id="consecutive-help" class="field-help">1–10. Higher values ignore short spikes but warn later.</p><p id="consecutive-error" class="field-error" role="alert"></p></div>
+<div class="field"><label for="sample-interval">Time between readings (seconds)</label><input id="sample-interval" type="number" inputmode="numeric" min="2" max="60" step="1" required aria-describedby="interval-help interval-error"><p id="interval-help" class="field-help">2–60 s. Calibration always measures every 2 s, then returns to this.</p><p id="interval-error" class="field-error" role="alert"></p></div>
+</div>
+<p id="confirmation-time" class="settings-summary" aria-live="polite"></p>
+<p class="small">Warnings stay paused while the sensor warms up after a restart, during calibration, and while a sensor reports an error, whatever these settings are.</p>
+</fieldset>
+<div class="settings-actions"><button id="settings-save" class="primary" disabled>Save settings</button><button id="settings-discard" type="button" class="quiet" disabled>Discard changes</button></div>
+<p class="small">Saving stores the settings you want. The device picks them up on its next check-in and then confirms them above.</p>
+</form>
+</article>
+<article class="card" data-calibration-panel><div class="card-heading"><h2>Current calibration</h2><span class="small">Read only</span></div><p class="small" data-calibration-status>No device report yet.</p><dl class="calibration-values" data-calibration-values></dl><p class="small">Choosing a manual threshold: multiply the baseline by how far above clean air a warning should start, for example 800 mV × 1.25 = 1000 mV. Recalibrating does not change a saved manual threshold, so check it again after a new calibration.</p></article>
+</div>
+</section>
 <section id="archives" class="tab" aria-label="Archives" hidden>
-<article class="card manual-archive-card"><div class="card-heading"><h2>Create an archive</h2><span class="small">Selected device</span></div>
-<form id="archive-form"><div class="toolbar"><label>From<input id="archive-from" type="datetime-local" required></label><label>To<input id="archive-to" type="datetime-local" required></label></div>
-<p class="small">Times use your browser timezone, as in History. Both endpoints are included. Select up to 31 days of readings currently in History.</p>
-<p id="archive-count" role="status" aria-live="polite">Choose a range to count selected entries.</p>
-<label>Archive label<input id="archive-label" type="text" maxlength="80" placeholder="e.g. Week 1 — coop observations" required></label>
-<p class="small">Selected entries move out of History after the archive is saved and verified. Other readings stay in History. Large ranges are saved in several files inside one archive folder.</p>
-<button id="create-archive" class="primary" disabled>Create archive</button><p id="archive-progress" class="small" role="status" aria-live="polite"></p></form></article>
-<article class="card"><div class="card-heading"><h2>Archive library</h2><span class="small">Private storage</span></div><p>Manually labeled archives and automatic archives of readings older than 30 days. No automatic archive deletion.</p><div id="archive-list"></div><button id="more-archives" hidden>Load next page</button></article></section>
+<p class="arc-intro">Readings stay in History for 30 days. After that they move here automatically, in one folder per day. You can also move a chosen period into a labelled archive yourself. Nothing here is deleted automatically, and every file can be downloaded.</p>
+<article class="card arc-library"><div class="card-heading"><div><h2>Library</h2><p id="archive-summary" class="small"></p></div><div class="arc-tools"><div id="archive-filter" class="segmented" role="group" aria-label="Show archives" hidden><button type="button" data-filter="all" class="selected" aria-pressed="true">All</button><button type="button" data-filter="manual" aria-pressed="false">Manual</button><button type="button" data-filter="automatic" aria-pressed="false">Automatic</button></div><button id="new-archive" type="button">New archive</button></div></div>
+<div id="archive-job" class="arc-job" hidden><div id="archive-job-bar" class="usage-bar" hidden><span id="archive-job-fill" class="usage-fill"></span></div><p id="archive-progress" role="status" aria-live="polite"></p></div>
+<div id="archive-list" class="arc-list"></div><button id="more-archives" class="arc-more" type="button" hidden>Load more archives</button></article>
+<details id="archive-create" class="card disclosure arc-create"><summary><span class="arc-create-title">Create an archive</span><span class="small">Move a period of readings out of History</span></summary>
+<p>Move a range of readings out of History into a labelled, downloadable archive. Use it to keep a finished experiment together.</p>
+<form id="archive-form"><div class="field-row"><div class="field"><label for="archive-from">From</label><input id="archive-from" type="datetime-local" required></div><div class="field"><label for="archive-to">To</label><input id="archive-to" type="datetime-local" required></div></div>
+<p class="field-help arc-range-help">Your local time, as in History. Readings at exactly the From and To times are included. Up to 31 days, from readings still in History.</p>
+<p id="archive-count" class="arc-count" role="status" aria-live="polite">Choose a range to count readings.</p>
+<div class="field"><label for="archive-label">Label</label><input id="archive-label" type="text" maxlength="80" placeholder="e.g. Week 1 — coop observations" required aria-describedby="archive-label-help"><p id="archive-label-help" class="field-help">Up to 80 characters. Used as the folder name and the ZIP file name.</p></div>
+<p class="arc-consequence">The selected readings leave History and the trend charts once they are safely saved. Other readings are not touched.</p>
+<button id="create-archive" class="primary" disabled>Archive readings…</button></form></details></section>
 <p class="scope-note">MQ-135 measures relative gas response. These readings do not represent validated ammonia ppm.</p>
-</div></main><footer><span>Coop Monitor</span><span>ESP32-C3 · MQ-135 · AHT20 / BMP280</span></footer>
-</body></html>
+</div>
+</main>
+<footer class="app-footer"><span>Coop Monitor</span><span>ESP32-C3 · MQ-135 · AHT20 / BMP280</span></footer>
+</body>
+</html>

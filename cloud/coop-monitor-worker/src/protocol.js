@@ -2,7 +2,7 @@ export class ApiError extends Error {
   constructor(status, code, message) { super(message); this.status = status; this.code = code; }
 }
 export const DEFAULT_CONFIG = Object.freeze({ mqThresholdMode: 'automatic', manualThresholdMv: null, warningConsecutiveSamples: 3, samplingIntervalSec: 2 });
-export const COMMAND_TYPES = ['CAL_SHOW', 'CAL_EXPORT', 'CAL_START', 'CAL_CANCEL', 'NET_STATUS', 'NET_RECONNECT', 'CONFIG_SHOW', 'RESTART', 'HELP'];
+export const COMMAND_TYPES = ['CAL_SHOW', 'CAL_EXPORT', 'CAL_START', 'CAL_CANCEL', 'NET_STATUS', 'NET_RECONNECT', 'CONFIG_SHOW', 'RESTART', 'HELP', 'SD_STATUS', 'SD_TAIL', 'SD_FLUSH', 'SD_EJECT', 'SD_MOUNT'];
 export const TERMINAL = new Set(['completed', 'failed', 'expired', 'uncertain']);
 export const SAMPLE_FIELDS = ['seq', 'uptimeMs', 'sampledAt', 'mqRaw', 'mqMv', 'mqRatio', 'mqThresholdMv', 'ahtTemperatureC', 'humidityPct', 'bmpTemperatureC', 'pressureHpa', 'status', 'configRevision', 'calibrationRevision'];
 const fail = message => { throw new ApiError(400, 'invalid_payload', message); };
@@ -28,6 +28,31 @@ export function redact(message) {
     .replace(/((?:password|token|authorization|secret|ssid)["']?\s*[:=]\s*)(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\r\n,;]+)/gi, '$1[redacted]')
     .slice(0, 512);
 }
+// Optional device health summary. Never rejects an exchange: invalid or unknown fields are dropped,
+// so a firmware/backend mismatch cannot block readings.
+const RESET_REASONS = ['power_on', 'external', 'software', 'panic', 'interrupt_watchdog', 'task_watchdog', 'watchdog', 'deep_sleep', 'brownout', 'sdio', 'usb', 'jtag', 'efuse', 'power_glitch', 'cpu_lockup', 'unknown'];
+const SD_STATES = ['ok', 'absent', 'error', 'disabled'];
+const count = v => Number.isSafeInteger(v) && v >= 0 ? v : undefined;
+const between = (v, min, max) => Number.isSafeInteger(v) && v >= min && v <= max ? v : undefined;
+const compact = o => { const out = Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)); return Object.keys(out).length ? out : undefined; };
+function sensorHealth(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return undefined;
+  return compact({ ok: typeof v.ok === 'boolean' ? v.ok : undefined, recovered: count(v.recovered), failed: count(v.failed) });
+}
+export function sanitizeHealth(h) {
+  if (!h || typeof h !== 'object' || Array.isArray(h)) return undefined;
+  const sd = h.sd && typeof h.sd === 'object' && !Array.isArray(h.sd) ? compact({
+    state: SD_STATES.includes(h.sd.state) ? h.sd.state : undefined, fileBytes: count(h.sd.fileBytes), flushes: count(h.sd.flushes),
+    flushFailures: count(h.sd.flushFailures), verifyFailures: count(h.sd.verifyFailures), bufferedBytes: count(h.sd.bufferedBytes),
+    droppedRecords: count(h.sd.droppedRecords), lastFlushAgeSec: count(h.sd.lastFlushAgeSec),
+  }) : undefined;
+  return compact({
+    resetReason: RESET_REASONS.includes(h.resetReason) ? h.resetReason : undefined,
+    rssiDbm: between(h.rssiDbm, -127, 0), wifiReconnects: count(h.wifiReconnects), uploadFailures: count(h.uploadFailures),
+    queuePending: count(h.queuePending), freeHeap: count(h.freeHeap), minFreeHeap: count(h.minFreeHeap), largestFreeBlock: count(h.largestFreeBlock),
+    aht: sensorHealth(h.aht), bmp: sensorHealth(h.bmp), sd,
+  });
+}
 export function validateExchange(value) {
   const v = object(value, 'exchange');
   if (v.protocolVersion !== 1) fail('protocolVersion must be 1');
@@ -42,6 +67,8 @@ export function validateExchange(value) {
     droppedReadings: integer(s.droppedReadings ?? 0, 'droppedReadings'), droppedLogs: integer(s.droppedLogs ?? 0, 'droppedLogs'),
   };
   if (!['pending', 'applied', 'failed'].includes(state.configStatus)) fail('Invalid configStatus');
+  const health = sanitizeHealth(s.health);
+  if (health) state.health = health;
   if (s.calibration != null) {
     const c = object(s.calibration, 'calibration');
     state.calibration = { revision: integer(c.revision, 'calibration.revision'), baselineMv: measure(c.baselineMv, 'baselineMv', 0, 3300), thresholdMv: measure(c.thresholdMv, 'thresholdMv', 0, 3300), sdMv: measure(c.sdMv, 'sdMv', 0, 3300), samples: integer(c.samples ?? 0, 'calibration.samples'), temperatureC: measure(c.temperatureC, 'calibration.temperatureC', -50, 150), humidityPct: measure(c.humidityPct, 'calibration.humidityPct', 0, 100) };

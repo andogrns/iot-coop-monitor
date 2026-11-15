@@ -1,0 +1,91 @@
+/* Owned by the History tab (stage 2). Loaded after style.css; use its tokens and classes. */
+
+/* ---------- Control bar: view switch + order + rows per page ---------- */
+.history-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-4); }
+.history-views { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.history-views::-webkit-scrollbar { display: none; }
+.history-views button { flex: 0 0 auto; white-space: nowrap; }
+.history-options { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+.history-option { display: flex; align-items: center; gap: var(--space-2); }
+.history-option label { margin: 0; font-size: 12px; white-space: nowrap; }
+/* #history prefix outranks the legacy #history-order width rule in style.css. */
+#history .history-option select { width: auto; margin: 0; min-height: 34px; padding: 5px 8px; font-size: 13px; }
+
+/* ---------- Custom range ---------- */
+.history-range {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-3); padding: var(--space-3) var(--space-4);
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.history-range .field { margin: 0; flex: 0 1 230px; min-width: 0; }
+.history-range .field > label { font-size: 12px; margin-bottom: 4px; }
+.history-range input { min-height: 38px; padding: 7px 10px; }
+.history-range button { min-height: 38px; }
+.history-range .field-error, .history-pending { flex-basis: 100%; margin: 0; }
+
+/* ---------- Summary line + export ---------- */
+.history-summary-row {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--line);
+}
+.history-summary { margin: 0; color: var(--ink); min-width: 0; overflow-wrap: anywhere; }
+.history-summary strong { font-weight: 600; }
+.history-summary-meta { color: var(--sub); }
+.history-export-status { margin: var(--space-2) 0 0; }
+.history-export-status:empty { display: none; }
+.history-downloads { margin: var(--space-2) 0 0; padding-left: 20px; font-size: 12px; line-height: 1.7; }
+.history-downloads:empty { display: none; }
+
+/* ---------- Empty / error states ---------- */
+#history-empty { margin-top: var(--space-4); }
+#history-empty .empty-state { padding: var(--space-6) var(--space-5); }
+.history-retry, .history-archives-link { display: inline-flex; margin-top: var(--space-3); }
+.history-archives-link { font-size: 13px; }
+
+/* ---------- Table ---------- */
+/* Short enough that "Load more" stays on screen below it on a laptop (~800 px tall window). */
+#history-table { max-height: clamp(300px, calc(100vh - 420px), 640px); margin: var(--space-3) 0 0; }
+#history-table th { vertical-align: bottom; line-height: 1.3; }
+#history-table .th-unit { display: block; font-weight: 400; font-size: 11px; }
+#history-rows td { padding: 5px 10px; font-size: 13px; line-height: 1.4; }
+#history-table .history-no { color: var(--sub); width: 1%; }
+#history-rows .badge { padding: 1px 8px; font-size: 11px; }
+.history-ok { color: var(--sub); }
+.history-est {
+  display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: var(--radius-pill);
+  background: var(--muted-bg); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 1.5;
+  text-decoration: none; cursor: help;
+}
+/* Gas-warning rows: danger wash plus a left rule; sensor-fault rows: a warn rule only. */
+#history-rows tr.is-warning td { background: var(--danger-bg); }
+#history-rows tr.is-warning td:first-child { box-shadow: inset 3px 0 0 var(--danger); }
+#history-rows tr.is-warning .badge.danger { background: var(--danger-solid); color: var(--on-danger); }
+#history-rows tr.is-fault td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+
+/* ---------- Load more ---------- */
+.history-more { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-3); }
+.history-more:has(#more-history[hidden]):has(#history-end:empty) { display: none; }
+.history-notes { margin: var(--space-2) 0 0; padding-left: 20px; line-height: 1.6; }
+.history-notes li + li { margin-top: 4px; }
+
+/* ---------- Phone ---------- */
+@media (max-width: 640px) {
+  .history-controls { flex-direction: column; align-items: stretch; }
+  /* Five views as a 3 + 2 grid so every option stays visible. */
+  .history-views { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; }
+  .history-views button { padding: 4px 6px; }
+  .history-views button[data-view=custom] { grid-column: span 2; }
+  .history-options { flex-wrap: nowrap; gap: var(--space-3); }
+  .history-option { flex: 1; min-width: 0; flex-direction: column; align-items: stretch; gap: 4px; }
+  #history .history-option select { width: 100%; min-height: 40px; }
+  .history-range .field { flex: 1 1 100%; }
+  .history-range button, .history-summary-row button, .history-more button { width: 100%; }
+  .history-summary-row { flex-direction: column; align-items: stretch; }
+  /* The table scrolls sideways inside its frame; keep the time column pinned. */
+  #history-table .history-no { display: none; }
+  #history-table .history-time { position: sticky; left: 0; z-index: 1; background: var(--panel); box-shadow: 1px 0 0 var(--line); }
+  #history-table thead .history-time { z-index: 2; background: var(--panel-2); }
+  #history-rows tr.is-warning td.history-time { background: var(--danger-bg); box-shadow: inset 3px 0 0 var(--danger), 1px 0 0 var(--line); }
+  #history-rows tr.is-fault td.history-time { box-shadow: inset 3px 0 0 var(--warn), 1px 0 0 var(--line); }
+  #history-table { max-height: 60vh; }
+}

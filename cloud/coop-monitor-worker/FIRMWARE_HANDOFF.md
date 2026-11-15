@@ -1,8 +1,10 @@
 # ESP32 firmware connection handoff
 
+Source/contract reviewed **5 November 2026 (Asia/Jakarta)**. For whole-project continuity use the [project handoff](../../docs/PROJECT_HANDOFF.md), [stack architecture](../../docs/STACK_ARCHITECTURE.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md). This file owns the device wire contract; no physical/cloud readback was performed during this review.
+
 ## Provisioned connection
 
-The backend is connected to physical `coop-monitor-01`, running `cloudflare-1.0.1`. The ignored file `../../firmware/coop_monitor/dashboard.local.json` contains the complete device ID, HTTPS endpoint and device bearer token. The active firmware and `configure_network.ps1` consume this protocol-v1 configuration. Compilation, erase-all-off upload, preserved calibration/settings and real HTTPS sensor ingestion were verified on 10 October 2026. See the [firmware guide](../../firmware/coop_monitor/README.md).
+Configured device is `coop-monitor-01`; source firmware is `cloudflare-1.0.4` (sensor-focused build with OLED disabled). The ignored `../../firmware/coop_monitor/dashboard.local.json` is the device ID/endpoint/token provisioning input consumed by `configure_network.ps1` for the active protocol-v1 firmware. It was not read for this review. Compilation, erase-all-off upload, retained calibration/settings and real HTTPS ingestion were verified on **10 October**. That is not current connectivity evidence. See the [firmware guide](../../firmware/coop_monitor/README.md) and [dated state](../../PROJECT_CONTEXT.md).
 
 Endpoint: `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange`
 
@@ -15,7 +17,7 @@ Keep the device token in local provisioning/NVS. Do not put the owner key or ses
 - Exchange approximately every 2 seconds, even if sampling is configured slower. If `uploads.paused`, keep local sensing running and exchange every `retryAfterSec` (initially 60 seconds); temporarily use 2 seconds for pending command receipts. The current backend does not persist fresh state/readings/logs while paused, so dashboard device state may become stale.
 - Generate a random boot ID on every reboot; keep it stable for that boot. The implementation uses 64-bit `esp_timer_get_time()` uptime, independent of the 32-bit `millis()` wrap. Sequence IDs are unsigned 32-bit, monotonic within a boot and never reused for different readings. The firmware stops enqueueing before sequence overflow; reboot creates a new boot ID.
 - Preserve a reading's exact uptime and payload on every retry. IDs are scoped to device/boot; deduplication compares sequence IDs within their immutable uptime minute. Changing uptime or reusing IDs violates the protocol.
-- Maximum 30 readings, 6 logs, 5 command results per exchange. Limit backlog to three uptime minute windows plus the current state minute. Drain backlog in successive exchanges.
+- Server admission maximum: 30 readings, 6 logs, 5 command results per exchange. **Current firmware batch: 12 readings, 6 logs, 5 results.** Limit backlog to three uptime minute windows plus the current state minute. Drain backlog in successive exchanges.
 - Unknown UTC and unavailable sensor measurements are JSON `null`; do not send NaN, `NA`, guessed UTC, or zero in place of missing data. UTC, when known, must agree with server-anchored uptime within 5 minutes. `estimatedAt` in history is explicitly estimated, not the original device timestamp.
 
 Example (substitute real measurements):
@@ -60,7 +62,7 @@ Successful response contains `protocolVersion`, `serverTime`, `acked`, `rejected
 - On timeout, 429, 5xx, or connection failure: exponential backoff with jitter, bounded to 60 seconds; retain exact IDs/payloads. On 400/409 inspect the error and repair the client; endless retries of invalid data are inappropriate. On 401 stop authenticated uploads until local credentials are corrected.
 - `desiredConfig` is `{revision, settings}`. Validate all four settings, apply atomically in the sampling task, persist only on change, reset relevant warning streaks, and report `appliedConfigRevision` and `configStatus` (`pending/applied/failed`). A cloud save does not prove firmware application.
 - Settings: automatic/manual MQ threshold; manual 10–2399 mV; consecutive samples 1–10; interval 2–60 s. Defaults: automatic, null manual value, 3 samples, 2 s. Keep warm-up/calibration/ADC/sensor guards in manual mode.
-- Supported command types: `CAL_SHOW`, `CAL_EXPORT`, `CAL_START`, `CAL_CANCEL`, `NET_STATUS`, `NET_RECONNECT`, `CONFIG_SHOW`, `RESTART`, `HELP`. `CAL_START` requires `args.referenceConditionsConfirmed=true`.
+- Supported command types: `CAL_SHOW`, `CAL_EXPORT`, `CAL_START`, `CAL_CANCEL`, `NET_STATUS`, `NET_RECONNECT`, `CONFIG_SHOW`, `RESTART`, `HELP`, and from `cloudflare-1.2.0` the SD backup commands `SD_STATUS`, `SD_TAIL`, `SD_FLUSH`, `SD_EJECT`, `SD_MOUNT` (no arguments; older firmware skips unknown types and they expire). `CAL_START` requires `args.referenceConditionsConfirmed=true`.
 - Before starting a command check its expiry against synchronized time. Persist acceptance metadata and wait for the server to acknowledge `accepted` before executing; persist `running` before dispatch. Then report `completed`/`failed`. Return `uncertain` after recovery when completion cannot be proved. Prevent execution of the same command ID twice across reboot. A command already started can complete after expiry. Keep terminal results available for retry until acknowledged. `RESTART` waits for the server's running acknowledgement and reports completion only on a confirmed software-reset boot.
 - `commandResults`: `{id,status,message}`. Do not claim completion until the handler reports actual completion. Backend state transitions are monotonic and reject expired queued commands or terminal regression.
 
@@ -73,5 +75,7 @@ Public ISRG Root X1/X2 and GTS roots are in `cloudflare_roots.h`; `refresh_tls_r
 The ESP32-C3 source compilation used core 3.3.11, USB CDC enabled, no OTA, the existing 4 MB partition layout and erase-all disabled. The approved physical upload preserved NVS and the previous filesystem. USB TX is nonblocking; optional Serial output cannot hold up normal sampling. See [root verification](../../VERIFICATION.md) for build figures, backup details and physical history evidence.
 
 ## Hardware acceptance still required
+
+Local 22 October checks passed 82 Node tests and 50 isolated Worker checks, including the current protocol-1 batch/retry contract. These are synthetic host/runtime evidence, not a new physical ingestion or warning-behavior check. Deferred identity/clock/command/capacity findings remain in the [audit](../../docs/BACKEND_AUDIT_2026-10-12.md).
 
 The earlier backend probes used synthetic readings. The subsequent physical repair verified preserved calibration/settings, actual ESP32 TLS ingestion, dashboard display and sampling/uploads with the serial reader closed. Still check an independent power cycle, warm-up/warning guards, OLED behavior, changed settings, each command, Wi-Fi loss/reconnect, RAM overflow, pause and interrupted-command/restart recovery, then a 24-hour field run. Future uploads require calibration/chip checks and a full flash backup; preserve any legacy pending data first. Short live observations do not establish full physical acceptance.

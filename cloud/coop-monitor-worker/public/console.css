@@ -1,0 +1,125 @@
+/* Owned by the Console and Settings tabs (stage 2). Loaded after style.css; use its tokens and classes. */
+
+/* ==========================================================================
+   Console
+   ========================================================================== */
+.console-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+@media (min-width: 1001px) { #firmware-logs { position: sticky; top: var(--space-4); } }
+.console-main { display: grid; gap: var(--space-5); min-width: 0; }
+
+/* Command picker: grouped radio cards */
+.command-picker { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
+.command-group { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 6px; }
+.command-group legend { padding: 0; margin-bottom: var(--space-2); }
+.command-group-hint { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.command-option {
+  display: flex; align-items: flex-start; gap: var(--space-3); margin: 0; cursor: pointer;
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink);
+}
+.command-option:hover { border-color: var(--line-strong); }
+.command-option input { margin: 3px 0 0; flex-shrink: 0; }
+.command-option:has(input:checked) { border-color: var(--accent); background: var(--tint); }
+.command-option:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.command-group.disruptive .command-option { border-left: 3px solid var(--warn); }
+.command-group.disruptive .command-option:has(input:checked) { border-color: var(--danger); border-left-color: var(--danger); background: var(--danger-bg); }
+.command-option-body { display: grid; gap: 2px; min-width: 0; }
+.command-option-head { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; }
+.command-option-name { font-weight: 600; }
+.command-option-text { font-size: 12px; color: var(--sub); line-height: 1.45; }
+.command-option:has(input:disabled) { opacity: .55; cursor: not-allowed; }
+.command-group-note { margin: 0; font-size: 12px; color: var(--sub); }
+.command-token { font: 11px/1.4 var(--mono); color: var(--sub); overflow-wrap: anywhere; }
+
+.cal-confirm { margin-top: var(--space-4); padding: var(--space-3); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--panel-2); }
+.cal-confirm .check-label { margin: 0; font-weight: 500; align-items: flex-start; }
+.cal-confirm .check-label input { margin-top: 2px; flex-shrink: 0; }
+.cal-confirm.invalid { border-color: var(--danger); background: var(--danger-bg); }
+.command-offline { margin: var(--space-4) 0 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn); font-size: 13px; font-weight: 500; }
+.command-actions { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-4); }
+.command-actions .small { flex: 1; min-width: 180px; }
+
+/* Command history */
+.command-list { list-style: none; margin: var(--space-3) 0 0; padding: 0; max-height: 560px; overflow: auto; }
+.command-list .empty-state { margin: 0; }
+.command-item { padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.command-item:first-child { padding-top: 0; }
+.command-item:last-child { border-bottom: 0; }
+.command-item-head { display: flex; align-items: center; gap: var(--space-2) var(--space-3); flex-wrap: wrap; }
+.command-item-name { display: flex; align-items: baseline; gap: var(--space-2); flex-wrap: wrap; flex: 1; min-width: 0; }
+.command-item-time { white-space: nowrap; }
+.command-result { margin-top: var(--space-2); padding: var(--space-2) var(--space-3); background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--ink); max-height: 200px; }
+
+/* Firmware logs: the output box stays black with white monospace text (project rule). */
+#firmware-logs .card-heading { margin-bottom: var(--space-1); }
+#logs {
+  background: #000; color: #fff; font: 12px/1.6 var(--mono);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm);
+  min-height: 220px; max-height: 70vh; overflow: auto; overflow-wrap: anywhere;
+}
+#logs:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.log-line { display: grid; grid-template-columns: auto 5ch minmax(0, 1fr); gap: 0 1.2ch; padding: 1px 0; }
+.log-time, .log-level { white-space: pre; }
+.log-message { white-space: pre-wrap; }
+#logs.only-problems .log-line:not(.warn):not(.error) { display: none; }
+.log-empty { padding: var(--space-2) 0; }
+
+/* ==========================================================================
+   Settings
+   ========================================================================== */
+.settings-layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+
+.sync-status {
+  display: flex; gap: var(--space-3); align-items: flex-start; margin-top: var(--space-4);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--muted-bg); color: var(--muted);
+}
+.sync-status:empty { display: none; }
+.sync-status.ok { background: var(--ok-bg); color: var(--ok); }
+.sync-status.info { background: var(--info-bg); color: var(--info); }
+.sync-status.danger { background: var(--danger-bg); color: var(--danger); }
+.sync-icon { display: grid; place-items: center; flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%; border: 2px solid currentColor; font-weight: 700; font-size: 12px; line-height: 1; }
+.sync-body p { margin: 0; }
+.sync-title { font-weight: 600; color: inherit; }
+.sync-text { font-size: 13px; color: var(--ink); }
+.sync-meta { font-size: 12px; color: var(--sub); margin-top: 2px !important; }
+
+.settings-form { margin-top: var(--space-2); }
+.settings-group { border: 0; margin: var(--space-5) 0 0; padding: 0; min-width: 0; }
+.settings-group legend { padding: 0; margin-bottom: var(--space-3); font-weight: 600; color: var(--ink); font-size: 14px; }
+
+.choice-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.choice-card {
+  display: flex; align-items: flex-start; gap: var(--space-3); margin: 0; cursor: pointer;
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--panel); color: var(--ink);
+}
+.choice-card:hover { border-color: var(--line-strong); }
+.choice-card input { margin: 3px 0 0; flex-shrink: 0; }
+.choice-card.selected { border-color: var(--accent); background: var(--tint); }
+.choice-card:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.choice-body { display: grid; gap: 2px; }
+.choice-title { font-weight: 600; }
+.choice-text { font-size: 12px; color: var(--sub); line-height: 1.45; }
+
+/* style.css's `.field.invalid input` loses to its base input selector on specificity; restate it here. */
+.settings-form .field.invalid input { border-color: var(--danger); box-shadow: 0 0 0 1px var(--danger); }
+.manual-field { max-width: 360px; margin-bottom: 0; }
+.manual-relative { color: var(--ink); }
+.settings-row { align-items: start; }
+.settings-row .field { margin: 0; }
+.settings-summary { margin: var(--space-4) 0 var(--space-2); padding: var(--space-2) var(--space-3); border-left: 3px solid var(--accent); background: var(--panel-2); color: var(--ink); font-size: 13px; }
+.settings-actions { display: flex; gap: var(--space-2); flex-wrap: wrap; margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--line); }
+
+/* ==========================================================================
+   Narrow screens
+   ========================================================================== */
+@media (max-width: 1000px) {
+  .console-layout, .settings-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 540px) {
+  .choice-cards, .settings-row { grid-template-columns: minmax(0, 1fr); }
+  .settings-row { gap: var(--space-4); }
+  .manual-field { max-width: none; }
+  .settings-actions button { flex: 1; }
+  #logs { max-height: 60vh; padding: var(--space-3); }
+  .log-line { grid-template-columns: 5ch minmax(0, 1fr); }
+  .log-time { grid-column: 1 / -1; margin-top: var(--space-1); }
+}

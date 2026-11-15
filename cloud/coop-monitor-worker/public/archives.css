@@ -1,0 +1,98 @@
+/* Archives tab. Uses the design-system tokens from style.css; classes are prefixed arc-. */
+#archives > * + * { margin-top: var(--space-5); }
+.arc-intro { margin: 0; max-width: 72ch; }
+
+/* Library header */
+.arc-library .card-heading { align-items: flex-start; }
+.arc-tools { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.arc-list { margin-top: var(--space-4); display: grid; gap: var(--space-3); }
+.arc-more { margin-top: var(--space-4); }
+.arc-loading, .arc-filter-empty { margin: 0; padding: var(--space-5); text-align: center; border: 1px dashed var(--line-strong); border-radius: var(--radius); }
+
+/* Job progress (new and continued manual archives) */
+.arc-job { margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-radius: var(--radius); background: var(--info-bg); }
+.arc-job p { margin: 0; color: var(--ink); }
+.arc-job .usage-bar { margin-bottom: var(--space-2); background: var(--panel); }
+.arc-job.ok { background: var(--ok-bg); }
+.arc-job.ok p { color: var(--ok); }
+.arc-job.error { background: var(--danger-bg); }
+.arc-job.error p { color: var(--danger); }
+
+/* Folder rows */
+.arc-folder { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); min-width: 0; }
+.arc-folder.manual { border-left: 3px solid var(--info); }
+.arc-folder.incomplete { border-color: var(--warn); border-left-width: 3px; }
+.arc-row { display: flex; align-items: center; gap: var(--space-3); padding-right: var(--space-4); }
+button.arc-toggle {
+  flex: 1; min-width: 0; justify-content: flex-start; align-items: flex-start; text-align: left; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4); border: 0; border-radius: var(--radius); background: transparent; color: var(--ink); font-weight: 400;
+}
+button.arc-toggle:hover:not(:disabled) { background: var(--panel-2); }
+.arc-chevron {
+  width: 8px; height: 8px; flex-shrink: 0; margin-top: 7px;
+  border-right: 2px solid var(--sub); border-bottom: 2px solid var(--sub); transform: rotate(-45deg);
+}
+.arc-folder.open .arc-chevron { transform: rotate(45deg); margin-top: 4px; }
+@media (prefers-reduced-motion: no-preference) { .arc-chevron { transition: transform .15s; } }
+.arc-text { display: grid; gap: 4px; min-width: 0; }
+.arc-head { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.arc-title { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.arc-meta { display: flex; flex-wrap: wrap; column-gap: var(--space-2); font-size: 12px; color: var(--sub); }
+.arc-meta > span:not(:last-child)::after { content: '·'; margin-left: var(--space-2); }
+.arc-row .archive-resume { flex-shrink: 0; }
+
+/* Folder body */
+.arc-body { border-top: 1px solid var(--line); padding: var(--space-4); }
+.arc-actions { display: flex; gap: var(--space-2) var(--space-3); flex-wrap: wrap; }
+.arc-bar { margin-top: var(--space-3); max-width: 420px; }
+.arc-status { margin: var(--space-2) 0 0; font-size: 13px; }
+.arc-status:empty { display: none; }
+.arc-status.ok { color: var(--ok); }
+.arc-status.error { color: var(--danger); font-weight: 500; }
+.arc-files { margin-top: var(--space-3); }
+.arc-file {
+  display: grid; grid-template-columns: minmax(7rem, 1fr) 8rem 5.5rem 11.5rem 9.5rem;
+  align-items: center; gap: var(--space-1) var(--space-4); padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.arc-file-head { font-size: 12px; color: var(--sub); font-weight: 500; }
+.arc-file-name { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--ink); min-width: 0; font-weight: 500; }
+.arc-file-head .arc-file-name { font-weight: 500; }
+.arc-file-num { text-align: right; font-variant-numeric: tabular-nums; }
+.arc-file-saved { color: var(--sub); }
+.arc-file-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); }
+.arc-file-link { font-size: 13px; }
+.arc-checksum { grid-column: 1 / -1; margin: 0; font: 12px/1.5 var(--mono); color: var(--sub); overflow-wrap: anywhere; user-select: all; }
+.arc-body > .quiet { margin-top: var(--space-2); }
+
+/* Create an archive */
+.arc-create > summary { flex-wrap: wrap; column-gap: var(--space-3); }
+.arc-create-title { font-size: 16px; font-weight: 600; }
+.arc-create > summary .small { font-weight: 400; }
+.arc-create form { max-width: 640px; }
+.arc-create .field-row .field { margin-bottom: 0; }
+.arc-range-help { margin-top: var(--space-2); }
+.arc-count { margin: var(--space-3) 0 0; color: var(--ink); font-weight: 500; }
+.arc-count.error { color: var(--danger); }
+.arc-consequence { padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .arc-tools { width: 100%; }
+  .arc-tools .segmented { flex: 1; }
+  .arc-tools .segmented button { flex: 1; }
+  .arc-row { flex-direction: column; align-items: stretch; gap: 0; padding: 0; }
+  .arc-row .archive-resume { margin: 0 var(--space-4) var(--space-3); }
+  .arc-actions button, .arc-more { width: 100%; }
+  .arc-body { padding: var(--space-3); }
+  /* Name + actions on the first line, readings · size · saved on the second. */
+  .arc-file { display: flex; flex-wrap: wrap; column-gap: var(--space-2); row-gap: 0; }
+  .arc-file::after { content: ''; order: 3; flex-basis: 100%; height: 0; }
+  .arc-file-name { order: 1; flex: 1 1 auto; }
+  .arc-file-actions { order: 2; }
+  .arc-file > .arc-file-num, .arc-file > .arc-file-saved { order: 4; text-align: left; font-size: 12px; color: var(--sub); }
+  .arc-file > .arc-file-num:first-of-type { margin-left: 24px; }
+  .arc-file > .arc-file-num + .arc-file-num::before { content: '·'; margin-right: var(--space-2); }
+  .arc-file > .arc-file-saved { flex-basis: calc(100% - 24px); margin-left: 24px; }
+  .arc-checksum { order: 5; flex-basis: 100%; margin-top: var(--space-1); padding-left: 24px; }
+  .arc-file-head > :not(.arc-file-name) { display: none; }
+  .arc-create button.primary { width: 100%; }
+}

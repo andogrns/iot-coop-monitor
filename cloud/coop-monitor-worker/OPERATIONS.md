@@ -1,10 +1,14 @@
 # Operations and storage
 
+Source/procedure review: **22 October 2026 (Asia/Jakarta)**. For routine observations, incident triage and transfer acceptance use the [operations handoff](../../docs/OPERATIONS_HANDOFF.md); for implementation use the [stack architecture](../../docs/STACK_ARCHITECTURE.md). No production/account/device checks were performed in this refresh. Account/data commands below require current authorization. Provider limits/prices quoted under their original date were not revalidated; source budgets are application settings, not current entitlements.
+
 ## Included-capacity target
 
 One device uploading every 2 seconds creates about 43,200 daily exchanges. A dashboard open all day at 4-second refresh adds 21,600 snapshots. Typical ingestion updates one `WITHOUT ROWID` reading window per exchange, with extra writes at minute/boot boundaries and for logs/commands. There is no mutable timestamp index rewritten on every sample. Every sample is retained in the minute block; this is lossless grouping, not averaging.
 
-Capacity maintenance runs every 15 minutes. It reads the D1 `size_after` metadata, current-day minute counters and archive manifests using bounded/device-scoped queries. Estimates reserve 5,000 D1 writes/day and 21,600 Worker requests/day for housekeeping and owner access. At 80% a warning appears; at 95% of a 500 MB database, 10 GB archive storage, daily write budget or request budget new data writes pause. Missing capacity data or a check older than one hour pauses uploads. Firmware must honor the returned 60-second pause cadence.
+Capacity maintenance runs every 15 minutes. It reads D1 `size_after` metadata, current-day minute counters and archive manifests using bounded/device-scoped queries. Estimates reserve 5,000 D1 writes/day and 21,600 Worker requests/day for housekeeping/owner access. Source budgets are 500,000,000 database bytes, 10,000,000,000 archive bytes, 100,000 estimated daily D1 writes and 100,000 daily Worker requests. Database/archive/estimated-write usage warns at 80%; pauses at 95% also consider estimated requests plus the reserve. **Request-only exhaustion can pause without an earlier warning.** Missing capacity data or a check older than one hour pauses uploads. Firmware normally honors the returned 60-second pause cadence; pending command receipts temporarily exchange faster.
+
+These counters omit paused/invalid traffic, some writes, actual owner traffic and uncatalogued R2 objects. The [deferred audit findings](../../docs/BACKEND_AUDIT_2026-10-12.md) describe the accounting and admission limits. A green capacity panel is not measured account-wide headroom.
 
 These are application guards, not an account-wide billing cap. Other applications, manual bucket writes, unbounded owner downloads, attacks, retries, and Cloudflare accounting can differ. Workers/D1 Free provider limits can reject requests before a guard responds; R2 bills included-capacity overages. A paid Workers upgrade was not requested. Monitor the Cloudflare account usage and R2 billing dashboard, especially during the first field run. The request reserve assumes one dashboard; Console combines logs, commands and state in the same snapshot request. History/export, user actions and additional tabs add requests. No automatic upgrade exists.
 
@@ -32,7 +36,7 @@ Manual range archives run from the Archives tab and share the automatic maintena
 
 The displayed count is a snapshot of available individual entries. Creation checks it again. Subsequent late arrivals or automatic retention may change the final saved count; the job reports the actual archived count. Existing archives are excluded from selection. Count queries scan JSON tuples within an indexed device/range, while compression/mutations are chunked. Large selections add owner requests and database work; existing account-wide budget/orphan reconciliation limitations still apply. A lost chunk response can be continued safely using the saved job; an unverified R2 orphan is never catalogued or served.
 
-From this directory, use `cf.ps1`; it finds installed Node or the bundled runtime and fixes PATH for Wrangler.
+From this directory, use `cf.ps1`; it finds installed Node or the bundled runtime and fixes PATH for Wrangler. If script execution is blocked, use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File './cf.ps1'` followed by the authorized arguments. This is a process-only override, not a global policy change.
 
 ```powershell
 .\cf.ps1 d1 export coop-monitor-db --remote --output .local\coop-monitor-backup.sql

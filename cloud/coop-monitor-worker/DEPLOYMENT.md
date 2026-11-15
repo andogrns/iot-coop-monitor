@@ -1,15 +1,25 @@
 # Cloudflare deployment record
 
+**15 November 2026, fourth rollout (user-authorized):** version `84598cb1-d3b2-475c-a787-7324df88e491`. Ships the dashboard UX redesign (previously local only) plus the Console "SD card backup" command group, and adds `SD_STATUS`, `SD_TAIL`, `SD_FLUSH`, `SD_EJECT`, `SD_MOUNT` to the command allowlist (`src/protocol.js`). No migration, secret, binding or cron change. Before deploy: 126/126 Node tests passed, `version-assets.mjs` reported 0 changes, `da2869c5` was still live. After deploy: `/health` 200; anonymous snapshot, command list and command POST 401; live `index.html`, `app.js`, `console.js`, `console.css`, `style.css`, `ui.js`, `format.js`, `history.css`, `archives.css` SHA-256 match local. Read-only D1: `coop-monitor-01` on `cloudflare-1.2.0` stored 46 readings in the 10 minutes to 12:17:33Z, after the deploy. The authenticated dashboard was not opened by the agent and no dashboard command was sent.
+
+**15 November 2026, third rollout (user-authorized):** version `da2869c5-b6aa-454a-ae16-c9e2ca4bdc4d` groups automatic archive folders by UTC day instead of by hour (`src/archive-folders.js` only). No asset, migration, secret, binding or cron change; Wrangler reported no updated asset files. Before deploy: 113/113 tests passed, `61f099b3` was still live, all other local edits predated it, and four live dashboard asset hashes matched local. After deploy: `/health` 200; anonymous archive-folder and archive-file reads 401. Read-only D1 count: 71 automatic files in 24 hourly groups, now 6 daily folders (10–16 October 2026). The authenticated Archives tab was not opened by the agent.
+
+**15 November 2026, second rollout:** version `61f099b3-8c8c-4e43-9b09-7a99d56da794` adds `health.largestFreeBlock` (sanitized) and dashboard rows for it and for `cause=tls_memory` restarts. 113/113 tests passed; live asset hashes matched. Firmware `cloudflare-1.1.0` health reports were read back from D1.
+
+**15 November 2026 rollout (user-authorized after local tests):** version `a32e1471-5276-438d-a0dd-0fac41693723`. Adds optional `state.health` storage, `recentBoots` in the snapshot, a Device health card on Overview, and Discord offline/back-online alerts on the existing `*/5` cron. No schema migration, secret or binding change. Before deploy: 113/113 local Node tests passed (7 new in `scripts/device-health.test.mjs`) and a dry run built. After deploy: `/health` returned `ok`, and live `app.js`, `index.html` and `style.css` SHA-256 matched local files. Not yet observed: a real health report from firmware 1.1.0, or a real Discord offline/online delivery (the bot invitation was still open on 13 November).
+
+**Record scope:** latest recorded rollout is **1 November 2026**, multipart CSV version `ae9536c7-60fa-475e-8fe5-e07da01ecdb1`; see the dated entry below. Documentation refreshed 5 November without account/production/device access. Present deployment and device state were not rechecked. Infrastructure values retain their original verification dates; this is not today's live status.
+
 Updated 13 October 2026, Asia/Jakarta. Archives now shows one expandable entry per session with label/range/archive date, individual files and all/selected ZIP downloads. All nine deployed asset hashes matched; live Home Testing Session metadata, original-file preservation and independently decoded ZIPs passed (19 files / 2,206 entries; selected two / 1,245). Earlier History range counts, DD/MM/YYYY dates, ordering and page sizes remain. No migration was needed. This rollout checked public assets/health and the named archive only; device/infrastructure values not explicitly rechecked retain their earlier verification date. Authenticated production browser UI and fresh physical acceptance were not tested.
 
-| Item | Live value |
+| Item | Last recorded value (verification dates above) |
 |---|---|
 | Cloudflare account | `7865a0c25fe350bb4395009c91eb83d1` |
 | Worker | `coop-monitor-worker` |
 | Dashboard origin | `https://coop-monitor-worker.coop-monitor-worker.workers.dev` |
 | Device exchange | `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange` |
 | Protocol | Version 1 |
-| Active version | `d19d670b-57b4-4108-be5f-ed7ca5b35c32` (Archive folders and ZIP downloads) |
+| Last recorded version | `84598cb1-d3b2-475c-a787-7324df88e491` (15 November UX redesign + SD Console commands; no migration) |
 | D1 database | `coop-monitor-db` |
 | D1 ID | `ea267d2d-f237-4374-9c72-d4fd6efb632c` |
 | D1 location | APAC; queries served by primary in HKG during checks |
@@ -20,8 +30,8 @@ Updated 13 October 2026, Asia/Jakarta. Archives now shows one expandable entry p
 | R2 public access | `r2.dev` disabled; custom public domains list empty |
 | R2 binding | `ARCHIVES`; no external S3/API keys required |
 | R2 lifecycle | No automatic archive deletion configured |
-| Schedule | `*/15 * * * *` (every 15 minutes, UTC) |
-| Secrets installed | `ADMIN_TOKEN`, `SESSION_SECRET` |
+| Schedule | `*/15 * * * *` maintenance; `*/5 * * * *` Discord gas-warning check (UTC) |
+| Secrets installed | `ADMIN_TOKEN`, `SESSION_SECRET`, `DISCORD_BOT_TOKEN` (13 November) |
 
 ## Access and provisioning
 
@@ -62,3 +72,6 @@ The independent device token is registered as a SHA-256 hash in D1. `../../firmw
 No paid Workers upgrade, custom domain, extra storage product, S3 key, firmware erase/flash, or existing Apps Script/Sheets change was needed for this backend task. R2 remains metered outside included capacity; application guards and usage monitoring are described in `OPERATIONS.md`.
 
 See `VERIFICATION.md` for backend evidence, [root verification](../../VERIFICATION.md) for the firmware compilation, and `FIRMWARE_HANDOFF.md` / the [firmware guide](../../firmware/coop_monitor/README.md) for USB cutover and device acceptance.
+
+## 1 November 2026: multipart CSV export
+User authorized publishing the tested change (95 local Node tests passed). Deployed version `ae9536c7-60fa-475e-8fe5-e07da01ecdb1` replaces `d19d670b-57b4-4108-be5f-ed7ca5b35c32`. CSV exports now request sequential pages and download numbered parts of at most 50,000 readings, with manual download links and partial-failure reporting. Four live asset hashes matched local files and anonymous History access returned 401. No migrations or device operations; authenticated browser downloads were not exercised.

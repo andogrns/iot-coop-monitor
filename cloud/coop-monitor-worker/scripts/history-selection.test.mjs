@@ -22,13 +22,13 @@ function ui(t, api = async () => ({ count: 1200 })) {
 test('counts the entire local date range, including singular and empty selections', async t => {
   let count = 1200; const paths = [];
   const f = ui(t, async path => { paths.push(path); return { count }; });
-  await f.controller.countSelection(); assert.equal(f.text(), `${(1200).toLocaleString()} data entries selected.`);
+  await f.controller.countSelection(); assert.equal(f.text(), `${(1200).toLocaleString()} readings in this range.`);
   const url = new URL('https://test' + paths[0]);
   assert.equal(url.pathname, '/api/archives/selection'); assert.equal(url.searchParams.get('deviceId'), 'coop');
   assert.equal(url.searchParams.get('from'), new Date(f.elements.from.value).toISOString());
   assert.equal(url.searchParams.get('to'), new Date(f.elements.to.value).toISOString());
-  count = 1; await f.controller.countSelection(); assert.equal(f.text(), '1 data entry selected.');
-  count = 0; await f.controller.countSelection(); assert.equal(f.text(), '0 data entries selected — no readings in this range.');
+  count = 1; await f.controller.countSelection(); assert.equal(f.text(), '1 reading in this range.');
+  count = 0; await f.controller.countSelection(); assert.equal(f.text(), 'No readings in this range.');
 });
 
 test('invalid, missing and overlong ranges clear the previous count without a request', async t => {
@@ -48,9 +48,9 @@ test('date edits invalidate immediately and debounce both inputs into one count'
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let calls = 0; const f = ui(t, async () => { calls++; return { count: 9 }; });
   await f.controller.countSelection();
-  f.elements.from.listeners.input(); assert.equal(f.text(), 'Counting selected entries…');
+  f.elements.from.listeners.input(); assert.equal(f.text(), 'Counting readings…');
   t.mock.timers.tick(200); f.elements.to.listeners.input(); t.mock.timers.tick(299); assert.equal(calls, 1);
-  t.mock.timers.tick(1); await Promise.resolve(); assert.equal(calls, 2); assert.equal(f.text(), '9 data entries selected.');
+  t.mock.timers.tick(1); await Promise.resolve(); assert.equal(calls, 2); assert.equal(f.text(), '9 readings in this range.');
 });
 
 test('older successes and failures cannot overwrite counts after date/device changes', async t => {
@@ -59,10 +59,10 @@ test('older successes and failures cannot overwrite counts after date/device cha
   const old = f.controller.countSelection();
   f.elements.from.value = '2026-10-13T10:15'; const current = f.controller.countSelection();
   pending[1].resolve({ count: 4 }); await current;
-  pending[0].resolve({ count: 99 }); await old; assert.equal(f.text(), '4 data entries selected.');
+  pending[0].resolve({ count: 99 }); await old; assert.equal(f.text(), '4 readings in this range.');
   const oldFailure = f.controller.countSelection(); f.setDevice('other'); const newer = f.controller.countSelection();
   pending[3].resolve({ count: 0 }); await newer;
-  pending[2].reject(Error('old failure')); await oldFailure; assert.match(f.text(), /0 data entries/);
+  pending[2].reject(Error('old failure')); await oldFailure; assert.match(f.text(), /No readings in this range/);
 });
 
 test('reset cancels a scheduled count and suppresses an in-flight response', async t => {
@@ -70,7 +70,7 @@ test('reset cancels a scheduled count and suppresses an in-flight response', asy
   let resolve, calls = 0; const f = ui(t, () => { calls++; return new Promise(r => resolve = r); });
   f.elements.from.listeners.input(); f.controller.reset(); t.mock.timers.tick(300); assert.equal(calls, 0);
   const pending = f.controller.countSelection(); f.controller.reset(); resolve({ count: 12 }); await pending;
-  assert.equal(f.text(), 'Choose a range to count selected entries.');
+  assert.equal(f.text(), 'Choose a range to count readings.');
 });
 
 test('failed or invalid responses replace an old count and a retry recovers', async t => {
@@ -78,7 +78,7 @@ test('failed or invalid responses replace an old count and a retry recovers', as
   const f = ui(t, async () => { if (response === 'fail') throw Error('Count unavailable'); return { count: response }; });
   await f.controller.countSelection(); response = 'fail'; await f.controller.countSelection(); assert.equal(f.text(), 'Count unavailable');
   response = -1; await f.controller.countSelection(); assert.match(f.text(), /Could not count/);
-  response = 2; await f.controller.countSelection(); assert.equal(f.text(), '2 data entries selected.');
+  response = 2; await f.controller.countSelection(); assert.equal(f.text(), '2 readings in this range.');
 });
 
 test('shared selection count equals complete History in both orders beyond one page and stays read-only/private', async t => {
@@ -106,4 +106,15 @@ test('shared selection count equals complete History in both orders beyond one p
   assert.equal((await app.fetch(request('/api/archives/selection?' + new URLSearchParams(params), { token: null }), env)).status, 401);
   const empty = { ...params, from: new Date(anchor - 20000).toISOString(), to: new Date(anchor - 10000).toISOString() };
   assert.equal((await (await app.fetch(request('/api/archives/selection?' + new URLSearchParams(empty)), env)).json()).count, 0);
+});
+
+test('onCount reports the count with the input range it belongs to, and null after edits or reset', async t => {
+  const f = ui(t, async () => ({ count: 7 })), seen = [];
+  f.controller.onCount((count, range) => seen.push([count, range.from, range.to]));
+  await f.controller.countSelection();
+  assert.deepEqual(seen.at(-1), [7, '2026-10-13T10:00', '2026-10-13T11:00']);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  f.elements.from.value = '2026-10-13T10:30'; f.elements.from.listeners.input();
+  assert.deepEqual(seen.at(-1), [null, '2026-10-13T10:30', '2026-10-13T11:00']);
+  f.controller.reset(); assert.equal(seen.at(-1)[0], null);
 });

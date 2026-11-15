@@ -2,6 +2,8 @@ import { ApiError, validateExchange, id, object, SAMPLE_FIELDS } from './protoco
 import { requireAdmin, requireDevice, makeSession, equal, sha256 } from './auth.js';
 import { exchange, snapshot, history, logs, setConfig, enqueueCommand, commandHistory, registerDevice } from './storage.js';
 import { maintenance, archiveList, archiveDownload } from './archive.js';
+import { gasAlerts, GAS_ALERT_CRON } from './gas-alerts.js';
+import { deviceAlerts } from './device-alerts.js';
 import { archiveFolders, archiveFiles } from './archive-folders.js';
 import { archiveSelection, startManualArchive, continueManualArchive } from './manual-archive.js';
 import { createLoginThrottle } from './login-throttle.js';
@@ -80,5 +82,12 @@ async function route(request,env) {
 }
 export default {
   async fetch(request,env){try{return await route(request,env);}catch(e){if(e instanceof ApiError)return json({error:e.code,message:e.message},e.status);console.error('request_failed');return json({error:'backend_unavailable',message:'Backend operation failed; retry with the same sample IDs'},503);}},
-  scheduled(event,env,ctx){ctx.waitUntil(maintenance(env).catch(() => { console.error('scheduled_maintenance_failed'); throw new Error('Scheduled maintenance failed'); }));}
+  scheduled(event,env,ctx){
+    if(event.cron===GAS_ALERT_CRON){
+      ctx.waitUntil(gasAlerts(env).catch(() => { console.error('scheduled_gas_alerts_failed'); throw new Error('Scheduled gas alert check failed'); }));
+      ctx.waitUntil(deviceAlerts(env).catch(() => { console.error('scheduled_device_alerts_failed'); throw new Error('Scheduled device alert check failed'); }));
+      return;
+    }
+    ctx.waitUntil(maintenance(env).catch(() => { console.error('scheduled_maintenance_failed'); throw new Error('Scheduled maintenance failed'); }));
+  }
 };
