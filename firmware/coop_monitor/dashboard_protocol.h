@@ -6,7 +6,7 @@
 
 namespace dashboard {
 constexpr uint32_t PROTOCOL_VERSION = 1;
-constexpr char FIRMWARE_VERSION[] = "cloudflare-1.0.1";
+constexpr char FIRMWARE_VERSION[] = "cloudflare-1.2.0";
 constexpr char DEFAULT_DEVICE_ID[] = "coop-monitor-01";
 constexpr char ENDPOINT[] = "https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange";
 constexpr size_t READING_CAPACITY = 64, LOG_CAPACITY = 16, BATCH_SIZE = 12;
@@ -70,14 +70,19 @@ struct Report {
   float baselineMv = NAN, calibrationThresholdMv = NAN, sdMv = NAN, temperatureC = NAN, humidityPct = NAN;
   char status[160] = "STARTING", configError[160]{};
 };
-enum class CommandType : uint8_t { NONE, CAL_SHOW, CAL_EXPORT, CAL_START, CAL_CANCEL, NET_STATUS, NET_RECONNECT, CONFIG_SHOW, RESTART, HELP };
+// Values are stored in the NVS command journal: append new types only, never reorder.
+enum class CommandType : uint8_t { NONE, CAL_SHOW, CAL_EXPORT, CAL_START, CAL_CANCEL, NET_STATUS, NET_RECONNECT, CONFIG_SHOW, RESTART, HELP,
+  SD_STATUS, SD_TAIL, SD_FLUSH, SD_EJECT, SD_MOUNT };
+constexpr unsigned COMMAND_TYPE_MAX = 14;
 enum class Phase : uint8_t { EMPTY, ACCEPTED, RUNNING, COMPLETED, FAILED, UNCERTAIN };
 inline const char *typeName(CommandType t) {
-  static const char *names[] = {"", "CAL_SHOW", "CAL_EXPORT", "CAL_START", "CAL_CANCEL", "NET_STATUS", "NET_RECONNECT", "CONFIG_SHOW", "RESTART", "HELP"};
-  return static_cast<unsigned>(t) <= 9 ? names[static_cast<unsigned>(t)] : "";
+  static const char *names[] = {"", "CAL_SHOW", "CAL_EXPORT", "CAL_START", "CAL_CANCEL", "NET_STATUS", "NET_RECONNECT", "CONFIG_SHOW", "RESTART", "HELP",
+    "SD_STATUS", "SD_TAIL", "SD_FLUSH", "SD_EJECT", "SD_MOUNT"};
+  static_assert(sizeof(names) / sizeof(names[0]) == COMMAND_TYPE_MAX + 1, "command names must match CommandType");
+  return static_cast<unsigned>(t) <= COMMAND_TYPE_MAX ? names[static_cast<unsigned>(t)] : "";
 }
 inline CommandType commandType(const char *v) {
-  if (v) for (unsigned n = 1; n <= 9; ++n) if (!strcmp(v, typeName(static_cast<CommandType>(n)))) return static_cast<CommandType>(n);
+  if (v) for (unsigned n = 1; n <= COMMAND_TYPE_MAX; ++n) if (!strcmp(v, typeName(static_cast<CommandType>(n)))) return static_cast<CommandType>(n);
   return CommandType::NONE;
 }
 inline const char *phaseName(Phase p) {

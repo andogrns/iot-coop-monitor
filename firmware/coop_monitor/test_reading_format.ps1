@@ -94,6 +94,7 @@ if ($null -ne $compiler) {
 #include <cmath>
 using std::isfinite;
 struct HostSerial {
+  int availableForWrite() { return 2048; }
   void print(const char *s) { std::fputs(s, stdout); }
   void print(float v, uint8_t decimals) { std::printf("%.*f", decimals, v); }
   void println() { std::putchar('\n'); }
@@ -126,7 +127,11 @@ int main() {
     $cpp = Join-Path $temp 'formatter.cpp'
     $exe = Join-Path $temp 'formatter.exe'
     try {
-        @($adapter, ($structs -join "`n"), 'Calibration calibration; uint32_t sampleNumber = 900;', $floatPrinter, $formatter, $sdFormatter, $main) -join "`n" | Set-Content -LiteralPath $cpp -Encoding utf8
+        # This formatter fixture uses the accepted automatic threshold; it does
+        # not test the dashboard's manual-threshold selection logic.
+        @($adapter, ($structs -join "`n"), 'Calibration calibration; uint32_t sampleNumber = 900;',
+          'float warningThreshold() { return calibration.thresholdMv; }',
+          $floatPrinter, $formatter, $sdFormatter, $main) -join "`n" | Set-Content -LiteralPath $cpp -Encoding utf8
         & $compiler.Source -std=c++11 -Wall -Wextra -Werror $cpp -o $exe
         if ($LASTEXITCODE -ne 0) { throw 'Host formatter compilation failed.' }
         $lines = @(& $exe)

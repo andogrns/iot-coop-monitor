@@ -34,7 +34,9 @@ try {
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     while ([DateTime]::UtcNow -lt $deadline) {
         try { $line = $serial.ReadLine().Trim() } catch [TimeoutException] { continue }
-        if ($line -match '^@CAL,(DATA,1,mq135-01,3,2\.000,RISING,|MISSING,mq135-01$)') { $calibration = $line; break }
+        # Preserve either the replaced module's profile during cutover or the
+        # replacement module's current profile/missing state after cutover.
+        if ($line -match '^@CAL,(DATA,1,mq135-0[12],3,2\.000,RISING,|MISSING,mq135-0[12]$)') { $calibration = $line; break }
     }
     $serial.WriteLine('TEST STATUS')
     $deadline = [DateTime]::UtcNow.AddSeconds(4)

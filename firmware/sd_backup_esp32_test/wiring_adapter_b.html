@@ -1,0 +1,77 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ESP32 MicroSD Adapter B</title>
+<style>
+  svg { width: 100%; height: auto; display: block; font-family: var(--font-mono, monospace); }
+  .board { fill: var(--card, #1e1e1e); stroke: var(--border, #555); stroke-width: 2; }
+  .sd { fill: color-mix(in srgb, var(--chart-1, #3b82f6) 18%, var(--card, #1e1e1e)); stroke: var(--chart-1, #3b82f6); stroke-width: 2; }
+  .pin { fill: var(--muted, #444); }
+  .pin.on { fill: var(--foreground, #eee); }
+  .lbl { fill: var(--muted-foreground, #999); font-size: 11px; }
+  .lbl.on { fill: var(--foreground, #eee); font-weight: 700; }
+  .title { fill: var(--foreground, #eee); font-size: 13px; font-weight: 700; font-family: var(--font-sans, sans-serif); }
+  .sub { fill: var(--muted-foreground, #999); font-size: 11px; font-family: var(--font-sans, sans-serif); }
+  .w { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+  .legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 16px; margin-top: 10px; font-family: var(--font-mono, monospace); font-size: 13px; }
+  .legend span { display: inline-block; width: 14px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 8px; }
+  .note { margin-top: 12px; padding: 12px 16px; border-radius: var(--radius, 8px); background: var(--warning-surface, #3a2e00); color: var(--foreground, #eee); font-family: var(--font-sans, sans-serif); font-size: 13px; line-height: 1.5; }
+</style></head>
+<body>
+<svg viewBox="0 0 690 480" role="img" aria-label="ESP32 DevKit to MicroSD adapter wiring">
+  <!-- ESP32 board -->
+  <rect class="board" x="180" y="20" width="150" height="410" rx="8"/>
+  <text class="title" x="255" y="42" text-anchor="middle">ESP32 DevKit</text>
+  <rect x="225" y="400" width="60" height="22" rx="3" fill="none" stroke="var(--border,#555)"/>
+  <text class="sub" x="255" y="415" text-anchor="middle">USB</text>
+
+  <!-- left header (top to bottom) -->
+  <g id="left"></g>
+  <g id="right"></g>
+
+  <!-- MicroSD adapter -->
+  <rect class="sd" x="520" y="90" width="140" height="250" rx="8"/>
+  <text class="title" x="600" y="360" text-anchor="middle">3.3 V SD Adapter</text>
+  <text class="sub" x="600" y="376" text-anchor="middle">(pin side)</text>
+  <g id="sdpins"></g>
+
+  <!-- wires drawn under pins -->
+  <g id="wires"></g>
+</svg>
+<div class="legend">
+  <div><span style="background:var(--destructive,#ef4444)"></span>3V3 → 3V3</div>
+  <div><span style="background:var(--chart-2,#22c55e)"></span>CS → GPIO4</div>
+  <div><span style="background:var(--chart-4,#a855f7)"></span>MOSI → GPIO23</div>
+  <div><span style="background:var(--chart-3,#f59e0b)"></span>CLK → GPIO18</div>
+  <div><span style="background:var(--chart-5,#06b6d4)"></span>MISO → GPIO19</div>
+  <div><span style="background:var(--muted-foreground,#999)"></span>GND → GND</div>
+</div>
+<div class="note"><b>Power this adapter from 3V3, never 5V/VIN.</b> Its 3V3 pin feeds the card directly at 3.3&nbsp;V. The ESP32 GPIO numbers are the same as for the first adapter; only the header order and power pin change. Pin positions shown are the common 30-pin DevKit V1 header; always go by the silkscreen labels on your board.</div>
+<script>
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; parent.appendChild(e); return e; };
+  const leftPins  = ["EN","VP","VN","D34","D35","D32","D33","D25","D26","D27","D14","D12","D13","GND","VIN"];
+  const rightPins = ["D23","D22","TX0","RX0","D21","D19","D18","D5","TX2","RX2","D4","D2","D15","GND","3V3"];
+  const used = new Set(["3V3","D23","D19","D18","D4","GND@R"]);
+  const y = i => 62 + i * 24;
+  const L = document.getElementById("left"), R = document.getElementById("right");
+  leftPins.forEach((p, i) => { const on = used.has(p); el("circle", {cx:180, cy:y(i), r:5, class:"pin" + (on?" on":"")}, L); el("text", {x:192, y:y(i)+4, class:"lbl" + (on?" on":"")}, L, p); });
+  rightPins.forEach((p, i) => { const on = used.has(p) || (p==="GND" && used.has("GND@R")); el("circle", {cx:330, cy:y(i), r:5, class:"pin" + (on?" on":"")}, R); el("text", {x:318, y:y(i)+4, "text-anchor":"end", class:"lbl" + (on?" on":"")}, R, p); });
+
+  const sdPins = ["3V3","CS","MOSI","CLK","MISO","GND"];
+  const sy = i => 120 + i * 40;
+  const S = document.getElementById("sdpins");
+  sdPins.forEach((p, i) => { el("circle", {cx:520, cy:sy(i), r:6, class:"pin on"}, S); el("text", {x:534, y:sy(i)+4, class:"lbl on"}, S, p); });
+
+  const W = document.getElementById("wires");
+  const rIdx = n => rightPins.indexOf(n);
+  const wire = (pts, color) => el("polyline", {points: pts.map(p => p.join(",")).join(" "), class:"w", stroke:color}, W);
+  const route = (from, to, lane, color) => wire([[330, from], [lane, from], [lane, to], [520, to]], color);
+  route(y(rIdx("D4")),  sy(1), 360, "var(--chart-2,#22c55e)");          // CS
+  route(y(rIdx("D18")), sy(3), 410, "var(--chart-3,#f59e0b)");          // CLK
+  route(y(rIdx("D19")), sy(4), 440, "var(--chart-5,#06b6d4)");          // MISO
+  route(y(rIdx("D23")), sy(2), 470, "var(--chart-4,#a855f7)");          // MOSI
+  route(y(13), sy(5), 500, "var(--muted-foreground,#999)");             // GND (right header)
+  wire([[330, y(14)], [345, y(14)], [345, 455], [675, 455], [675, 74], [506, 74], [506, sy(0)], [520, sy(0)]], "var(--destructive,#ef4444)"); // 3V3 -> 3V3
+  // keep pins drawn above wires
+  document.querySelector("svg").appendChild(L); document.querySelector("svg").appendChild(R); document.querySelector("svg").appendChild(S);
+</script>
+</body></html>
