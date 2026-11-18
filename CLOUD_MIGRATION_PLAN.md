@@ -25,11 +25,11 @@ The user selected direct Cloudflare Workers after the original Sites proposal. O
 
 ## Hardware and sensing
 
-Retain the ESP32-C3 SuperMini, MQ-135, two 10 kOhm divider resistors, AHT20/BMP280 combined board and SSD1306 OLED. Retain GPIO3 MQ analog input and shared GPIO4 SDA / GPIO5 SCL. MQ heater uses stable 5 V; sensor/display logic uses 3.3 V; grounds are shared. See [WIRING.md](firmware/coop_monitor/WIRING.md).
+Retain the ESP32-C3 SuperMini, MQ-135, two 10 kOhm divider resistors, AHT20/BMP280 combined board. Retain GPIO3 MQ analog input and shared GPIO4 SDA / GPIO5 SCL. MQ heater uses stable 5 V; sensor logic uses 3.3 V; grounds are shared. See [WIRING.md](firmware/coop_monitor/WIRING.md).
 
 MicroSD and its GPIO10/6/7/1 wires are unused. GPIO9/BOOT resumes its normal bootloader role and has no field-session stop action. No new sensor, relay, fan, RTC, battery system or enclosure redesign is included.
 
-The sensing loop retains ten-minute boot warm-up, clean-air calibration, readable Serial output, OLED warning priority, ADC-high checks and invalid-sensor handling. Manual thresholds retain the warning guards. MQ-135 remains relative gas response, not validated ammonia ppm.
+The sensing loop retains ten-minute boot warm-up, clean-air calibration, readable Serial output, ADC-high checks and invalid-sensor handling. Manual thresholds retain the warning guards. MQ-135 remains relative gas response, not validated ammonia ppm.
 
 ## Firmware implementation
 
@@ -50,7 +50,7 @@ Upload pauses preserve local sensing/warnings and usually use 60-second exchange
 | `README.md`, `firmware/README.md` | Active Cloudflare overview; historical workflows identified separately |
 | `firmware/coop_monitor/README.md` | Build, USB cutover, provisioning, settings, commands, losses and acceptance |
 | `firmware/coop_monitor/WIRING.md` | Current pin table and SD-free diagram |
-| `firmware/coop_monitor/coop_monitor.ino` | Sensor/OLED/calibration integration and shared remote handlers |
+| `firmware/coop_monitor/coop_monitor.ino` | Sensor/calibration integration and shared remote handlers |
 | `firmware/coop_monitor/dashboard_protocol.h` | Configuration, record/receipt types, CRC and bounded RAM rings |
 | `firmware/coop_monitor/dashboard_runtime.h` | Secure exchange, settings/NVS, acknowledgements, commands and Wi-Fi task |
 | `firmware/coop_monitor/cloudflare_roots.h`, `refresh_tls_roots.mjs` | Public TLS trust roots and reproducible root refresh |
@@ -91,7 +91,7 @@ Historically, the migration source was prepared on `codex/cloudflare-firmware` f
 1. Completed: identified installed Cloudflare firmware and saved matching calibration/full 4 MB flash backups before repair.
 2. Completed: uploaded `cloudflare-1.0.1` with erase-all disabled, retained existing provisioning and left the previous filesystem untouched.
 3. Completed after upload/reset: matching calibration and settings revision 1. Still repeat after an independent power cycle.
-4. Completed: actual sensor history, HTTPS ingestion, dashboard display and two-second sampling with the serial reader closed. Still observe warm-up/warning guards and physical OLED status.
+4. Completed: actual sensor history, HTTPS ingestion, dashboard display and two-second sampling with the serial reader closed. Still observe warm-up/warning guards.
 5. Apply monitoring settings and inspect desired/applied revisions and resulting warning/sampling behavior.
 6. Exercise allowed commands, calibration outcomes, expiry, restart recovery and explicit uncertainty after interrupted operations.
 7. Exercise Wi-Fi loss/reconnect, RAM overflow and owner pause; inspect reported gaps and stale-state behavior.

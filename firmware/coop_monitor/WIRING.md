@@ -1,6 +1,6 @@
 # Active Cloudflare monitor wiring
 
-ESP32-C3 SuperMini, MQ-135, combined AHT20/BMP280 and a six-pin MicroSD adapter (firmware `cloudflare-1.1.0`, 15 November 2026). The OLED is removed; its firmware traffic was already disabled. USB supplies power and local provisioning. Sensor wiring is unchanged, so MQ-135 readings keep the same ADC path as earlier runs. No GPIO is shared between parts. Diagram: [wiring_c3_proposal.html](../sd_backup_esp32_test/wiring_c3_proposal.html).
+ESP32-C3 SuperMini, MQ-135, combined AHT20/BMP280 and a six-pin MicroSD adapter (firmware `cloudflare-1.1.0`, 15 November 2026). The OLED display is no longer part of the build. USB supplies power and local provisioning. Sensor wiring is unchanged, so MQ-135 readings keep the same ADC path as earlier runs. No GPIO is shared between parts. Diagram: [wiring_c3_proposal.html](../sd_backup_esp32_test/wiring_c3_proposal.html).
 
 | Connection | ESP32-C3 / supply |
 |---|---|

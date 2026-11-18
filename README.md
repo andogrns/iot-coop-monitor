@@ -1,12 +1,12 @@
 # IoT Coop Monitor
 
-ESP32-C3 poultry-coop environmental monitoring and preliminary early warning using MQ-135 and a combined AHT20/BMP280 module. An SSD1306 OLED is supported in source but disabled and currently disconnected. **MQ-135 measures relative gas response, not calibrated ammonia ppm.**
+ESP32-C3 poultry-coop environmental monitoring and preliminary early warning using MQ-135 and a combined AHT20/BMP280 module. **MQ-135 measures relative gas response, not calibrated ammonia ppm.**
 
 Documentation refreshed **18 November 2026 (Asia/Jakarta)** against local source, local Git state and a public read-only check of the live Worker. Active stack: Arduino C++ firmware `cloudflare-1.2.0` → Wi-Fi/verified HTTPS protocol 1 → Cloudflare Worker → D1 recent history/private R2 archives → the Signal owner dashboard (Overview with trend views, History, Console, Settings with gas-warning alerts, Archives).
 
 Default sampling is every 2 seconds (configurable 2–60); device exchange normally runs about every 2 seconds independently; dashboard snapshots refresh every 4 seconds. Searchable retention is configured to 30 days, with archive maintenance every 15 minutes. These are source settings, not today's device/cloud readback.
 
-Firmware retains USB diagnostics, calibration and warning guards. OLED output is currently disabled and the display was intentionally disconnected in the last recorded bench test. Pending measurements/logs use bounded RAM and can be lost on overflow or reboot. Firmware 1.1.0 and later also write them to a microSD backup (flushed about every 15 minutes, read back and verified). Nothing backfills that SD copy to the cloud yet. Calibration, provisioning, settings and command receipts persist in NVS. Routine monitoring needs power and internet; it does not require an open Serial Monitor or computer logger.
+Firmware retains USB diagnostics, calibration and warning guards. Pending measurements/logs use bounded RAM and can be lost on overflow or reboot. Firmware 1.1.0 and later also write them to a microSD backup (flushed about every 15 minutes, read back and verified). Nothing backfills that SD copy to the cloud yet. Calibration, provisioning, settings and command receipts persist in NVS. Routine monitoring needs power and internet; it does not require an open Serial Monitor or computer logger.
 
 ## Documentation and handoff
 
