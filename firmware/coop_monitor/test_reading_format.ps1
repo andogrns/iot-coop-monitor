@@ -119,7 +119,7 @@ int main() {
   if (!formatLogRow(row, sizeof(row), r,
                     "WARMUP|CAL_MISSING|AHT_ERROR|BMP_ERROR", 2, true)) return 2;
   std::printf("SDROW:%s\n", row);
-  printReadingBlock(r, "CAL_STABILIZING|CAL_COLLECTING|WARMUP|CAL_MISSING|AHT_ERROR|BMP_ERROR|MQ_ADC_HIGH|GAS_WARNING", 445556);
+  printReadingBlock(r, "CAL_STABILIZING|CAL_COLLECTING|WARMUP|CAL_MISSING|AHT_ERROR|BMP_ERROR|OLED_ERROR|MQ_ADC_HIGH|GAS_WARNING", 445556);
 }
 '@
     $temp = Join-Path ([IO.Path]::GetTempPath()) ('coop-format-' + [guid]::NewGuid().ToString('N'))
@@ -140,7 +140,7 @@ int main() {
         $rows = @(Read-Blocks $lines)
         Assert-Equal $rows.Count 3 'Actual firmware to capture integration'
         Assert-Equal ($rows[1][5..9] -join ',') 'NA,NA,NA,NA,NA' 'Firmware invalid readings'
-        Assert-Equal ($rows[2][10] -split ' \| ').Count 8 'Every status label is recognized'
+        Assert-Equal ($rows[2][10] -split ' \| ').Count 9 'Every status label is recognized'
         $sdRows = @($lines | Where-Object { $_ -like 'SDROW:*' } | ForEach-Object { $_.Substring(6) })
         Assert-Equal $sdRows.Count 2 'MicroSD row count'
         Assert-Equal $sdRows[0] 'Periodic,900,1800,1800,1100,2.200,1.1000,29.45,72.30,30.12,1008.65,OK' 'MicroSD numeric CSV row'

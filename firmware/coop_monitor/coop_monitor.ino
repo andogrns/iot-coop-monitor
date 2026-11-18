@@ -2,7 +2,10 @@
 #include <Wire.h>
 #include "dashboard_runtime.h"
 #include <Preferences.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
 #include "aht20_reader.h"
+#include "oled_transport.h"
 #include "bmp280_reader.h"
 #include <math.h>
 #include <errno.h>
@@ -19,11 +22,17 @@ constexpr int I2C_SCL_PIN = 5;
 constexpr uint8_t AHT20_ADDRESS = 0x38;
 constexpr uint8_t BMP280_ADDRESS_1 = 0x76;
 constexpr uint8_t BMP280_ADDRESS_2 = 0x77;
+constexpr uint8_t OLED_ADDRESS_1 = 0x3C;
+constexpr uint8_t OLED_ADDRESS_2 = 0x3D;
+constexpr uint8_t OLED_WIDTH = 128;
+constexpr uint8_t OLED_HEIGHT = 64;
+constexpr int8_t OLED_RESET_PIN = -1;
 constexpr float MQ_DIVIDER_SCALE = 2.0f;
 constexpr uint16_t ADC_WARNING_MV = 2400;
 // The original mq135-01 was damaged; never reuse its profile for this module.
 constexpr char SENSOR_ID[] = "mq135-02";
-constexpr uint32_t I2C_CLOCK_HZ = 100000;
+constexpr bool OLED_ENABLED = false; // User deferred OLED work; focus on data sensors.
+constexpr uint32_t I2C_CLOCK_HZ = OLED_ENABLED ? 10000 : 100000;
 
 constexpr uint32_t SAMPLE_INTERVAL_MS = 2000;
 constexpr char LOG_HEADER[] =
@@ -48,16 +57,22 @@ constexpr uint32_t CAL_STORAGE_MAGIC = 0x43414C31UL;
 
 Aht20Reader aht20;
 Bmp280Reader bmp280;
+Adafruit_SSD1306 display(OLED_WIDTH, OLED_HEIGHT, &Wire, OLED_RESET_PIN, 10000, 10000);
+OledTransport oledTransport;
 Preferences preferences;
 bool ahtReady = false;
 bool bmpReady = false;
+bool oledReady = false;
 uint8_t bmpAddress = 0;
+uint8_t oledAddress = 0;
 uint32_t startedMs = 0;
 uint64_t startedUptimeMs = 0;
 uint32_t lastSampleMs = 0;
 uint32_t sampleNumber = 0;
 uint8_t warningStreak = 0;
 uint32_t lastI2cRetryMs = 0;
+uint32_t oledTestStartedMs = 0;
+bool oledTestActive = false;
 
 struct Calibration {
   bool valid = false;
@@ -258,6 +273,17 @@ bool beginBmp280() {
   return false;
 }
 
+bool beginOled() {
+  if (!OLED_ENABLED) return false;
+  oledAddress = 0;
+  if (i2cDevicePresent(OLED_ADDRESS_1)) oledAddress = OLED_ADDRESS_1;
+  else if (i2cDevicePresent(OLED_ADDRESS_2)) oledAddress = OLED_ADDRESS_2;
+  else return false;
+  // Adafruit owns the framebuffer/drawing API; transport below checks I/O.
+  return display.begin(SSD1306_SWITCHCAPVCC, oledAddress, true, false) &&
+         oledTransport.begin(Wire, oledAddress);
+}
+
 void retryMissingI2cDevices() {
   if (millis() - lastI2cRetryMs < 10000) return;
   lastI2cRetryMs = millis();
@@ -269,17 +295,42 @@ void retryMissingI2cDevices() {
     bmpReady = beginBmp280();
     if (bmpReady) Serial.printf("@I2C,BMP,initialized,0x%02X\n", bmpAddress);
   }
+  if (OLED_ENABLED && !oledReady) {
+    oledReady = beginOled();
+    if (oledReady) Serial.printf("@I2C,OLED,initialized,0x%02X\n", oledAddress);
+  }
 }
 
 void scanI2cBus() {
-  Serial.printf("@I2C,BUS,SDA=4,SCL=5,hz=%lu,sda=%d,scl=%d,aht=%s,aht_error=%s,aht_recovered=%lu,aht_failed=%lu\n",
+  Serial.printf("@I2C,BUS,SDA=4,SCL=5,hz=%lu,sda=%d,scl=%d,aht=%s,oled=%s,aht_error=%s,oled_result=%u,aht_recovered=%lu,aht_failed=%lu\n",
       static_cast<unsigned long>(Wire.getClock()), digitalRead(4), digitalRead(5),
-      ahtReady ? "ready" : "error", aht20.error(),
+      ahtReady ? "ready" : "error", !OLED_ENABLED ? "disabled" : oledReady ? "ready" : "error", aht20.error(), oledTransport.lastResult(),
       static_cast<unsigned long>(aht20.recoveredReads()), static_cast<unsigned long>(aht20.failedReads()));
   for (uint8_t address = 8; address < 120; ++address) {
     if (i2cDevicePresent(address)) Serial.printf("@I2C,ACK,0x%02X\n", address);
   }
   Serial.println("@I2C,SCAN_DONE");
+}
+
+void testOled() {
+  if (!OLED_ENABLED) { Serial.println("@I2C,OLED,disabled_for_sensor_diagnosis"); return; }
+  oledReady = beginOled();
+  if (!oledReady) { Serial.println("@I2C,OLED,not_detected"); return; }
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.drawRect(0, 0, OLED_WIDTH, OLED_HEIGHT, SSD1306_WHITE);
+  display.setCursor(8, 12);
+  display.println("OLED DISPLAY TEST");
+  display.setCursor(8, 28);
+  display.println("SSD1306 128x64");
+  display.setCursor(8, 44);
+  display.print("I2C 0x"); display.print(oledAddress, HEX);
+  oledReady = oledTransport.show(display.getBuffer());
+  if (!oledReady) { Serial.printf("@I2C,OLED,transfer_failed,result=%u\n", oledTransport.lastResult()); return; }
+  oledTestStartedMs = millis();
+  oledTestActive = true;
+  Serial.println("@I2C,OLED,test_pattern_for_15_seconds,visual_confirmation_required");
 }
 
 Reading readSensors() {
@@ -335,6 +386,7 @@ void setDiagnosticI2cRate(const char *rate) {
   else if (strcmp(rate, "50000") == 0) hz = 50000;
   else if (strcmp(rate, "100000") == 0) hz = 100000;
   else { Serial.println("@I2C,RATE,invalid_use_10000_50000_100000"); return; }
+  if (OLED_ENABLED) { Serial.println("@I2C,RATE,requires_oled_disabled"); return; }
   // USB-only, RAM-only diagnostic. Boot restores I2C_CLOCK_HZ.
   Wire.setClock(hz);
   Serial.printf("@I2C,RATE,hz=%lu,temporary_until_reset\n", static_cast<unsigned long>(Wire.getClock()));
@@ -362,6 +414,66 @@ void checkMqAdc() {
   Serial.printf("@MQ,ADC,n=%u,pin=%d,raw_mean=%.2f,raw_min=%u,raw_max=%u,adc_mv_mean=%.3f,adc_mv_sd=%.3f,adc_mv_min=%u,adc_mv_max=%u,module_v_est=%.4f,zero_raw=%u,full_raw=%u,adc_high=%u\n",
       count, MQ_ANALOG_PIN, rawStats.mean, rawMin, rawMax, mvStats.mean, mvStats.sd(), mvMin, mvMax,
       mvStats.mean * MQ_DIVIDER_SCALE / 1000.0, zeroRaw, fullRaw, highMv);
+}
+
+void displayNumberOrDashes(float value, uint8_t decimals) {
+  if (isfinite(value)) display.print(value, decimals);
+  else display.print("--");
+}
+
+void showOnOled(const Reading &reading, const char *status) {
+  if (!oledReady) return;
+  if (oledTestActive && millis() - oledTestStartedMs < 15000) return;
+  oledTestActive = false;
+  if (!i2cDevicePresent(oledAddress)) { oledReady = false; return; }
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0, 0);
+  display.print("COOP AIR MONITOR");
+  display.drawLine(0, 9, OLED_WIDTH - 1, 9, SSD1306_WHITE);
+
+  display.setCursor(0, 12);
+  display.print("MQ ");
+  display.print(reading.mqAdcMv);
+  display.print("mV x");
+  if (calibration.valid) display.print(reading.mqAdcMv / calibration.baselineMv, 2);
+  else display.print("--");
+
+  display.setCursor(0, 21);
+  display.print("THR ");
+  if (calibration.valid) display.print(warningThreshold(), 0);
+  else display.print("--");
+  display.print("mV");
+
+  display.setCursor(0, 30);
+  display.print("AHT ");
+  displayNumberOrDashes(reading.ahtValid ? reading.ahtTemperatureC : NAN, 1);
+  display.print("C ");
+  displayNumberOrDashes(reading.ahtValid ? reading.humidityPercent : NAN, 1);
+  display.print("%");
+
+  display.setCursor(0, 39);
+  display.print("BMP ");
+  displayNumberOrDashes(reading.bmpValid ? reading.bmpTemperatureC : NAN, 1);
+  display.print("C");
+
+  display.setCursor(0, 48);
+  display.print("P ");
+  displayNumberOrDashes(reading.bmpValid ? reading.pressureHpa : NAN, 1);
+  display.print("hPa");
+
+  display.setCursor(0, 56);
+  if (strstr(status, "GAS_WARNING")) display.print("GAS WARNING");
+  else if (strstr(status, "MQ_ADC_HIGH")) display.print("MQ ADC HIGH");
+  else if (strstr(status, "CAL_STABILIZING")) display.print("CAL STABILIZING");
+  else if (strstr(status, "CAL_COLLECTING")) display.print("CAL COLLECTING");
+  else if (strstr(status, "AHT_ERROR")) display.print("AHT ERROR");
+  else if (strstr(status, "BMP_ERROR")) display.print("BMP ERROR");
+  else if (strstr(status, "WARMUP")) display.print("WARMUP");
+  else if (strstr(status, "CAL_MISSING")) display.print("CAL MISSING");
+  else { char line[32]; cloud::oledLine(line, sizeof(line)); display.print(line); }
+  oledReady = oledTransport.show(display.getBuffer());
 }
 
 bool startCalibration() {
@@ -439,11 +551,11 @@ void updateCalibration(const Reading &reading, uint32_t now) {
 
 void formatReadableStatus(const char *status, char *output, size_t capacity) {
   const char *flags[] = {"CAL_STABILIZING", "CAL_COLLECTING", "WARMUP",
-                        "CAL_MISSING", "AHT_ERROR", "BMP_ERROR",
+                        "CAL_MISSING", "AHT_ERROR", "BMP_ERROR", "OLED_ERROR",
                         "MQ_ADC_HIGH", "GAS_WARNING"};
   const char *labels[] = {"Calibration stabilizing", "Calibration collecting",
                          "Warming up", "Calibration missing", "AHT sensor error",
-                         "BMP sensor error", "MQ ADC high",
+                         "BMP sensor error", "OLED error", "MQ ADC high",
                          "Gas warning"};
   output[0] = '\0';
   for (size_t i = 0; i < sizeof(flags) / sizeof(flags[0]); ++i) {
@@ -577,6 +689,7 @@ void takeReading() {
   if (!calibration.valid) addFlag(status, sizeof(status), "CAL_MISSING");
   if (!reading.ahtValid) addFlag(status, sizeof(status), "AHT_ERROR");
   if (!reading.bmpValid) addFlag(status, sizeof(status), "BMP_ERROR");
+  if (OLED_ENABLED && !oledReady) addFlag(status, sizeof(status), "OLED_ERROR");
   const bool adcHigh = reading.mqAdcMv >= ADC_WARNING_MV;
   if (adcHigh) addFlag(status, sizeof(status), "MQ_ADC_HIGH");
 
@@ -597,6 +710,7 @@ void takeReading() {
 
   const uint32_t uptime = (now - startedMs) / 1000UL;
   logReading(reading, status, now, uptime);
+  showOnOled(reading, status);
   printReadingBlock(reading, status, uptime);
 }
 
@@ -766,6 +880,7 @@ void handleCommand(char *command) {
   else if (strcmp(command, "SENSOR STATUS") == 0) sensorStatus();
   else if (strncmp(command, "I2C RATE ", 9) == 0) setDiagnosticI2cRate(command + 9);
   else if (strcmp(command, "I2C SCAN") == 0) scanI2cBus();
+  else if (strcmp(command, "OLED TEST") == 0) testOled();
   else if (strcmp(command, "CAL START") == 0) startCalibration();
   else if (strcmp(command, "CAL CANCEL") == 0) {
     cancelCalibration("Calibration cancelled through USB");
@@ -775,7 +890,7 @@ void handleCommand(char *command) {
   else if (sdbackup::command(command)) {}
   else if (cloud::command(command)) {}
   else if (strcmp(command, "HELP") == 0) {
-    Serial.println("Commands: SD STATUS, SD TAIL, SD FLUSH, SD EJECT (before removing the card), SD MOUNT, SENSOR STATUS, MQ CHECK, I2C RATE <10000|50000|100000>, I2C SCAN, CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <endpoint>, CLOUD ID <id>, CLOUD TOKEN <64 lowercase hex>, NET STATUS, NET RECONNECT, CONFIG SHOW, HELP");
+    Serial.println("Commands: SD STATUS, SD TAIL, SD FLUSH, SD EJECT (before removing the card), SD MOUNT, SENSOR STATUS, MQ CHECK, I2C RATE <10000|50000|100000>, I2C SCAN, OLED TEST, CAL START, CAL CANCEL, CAL SHOW, CAL EXPORT, CAL IMPORT,..., WIFI SSID <name>, WIFI PASS <password>, WIFI OPEN, CLOUD URL <endpoint>, CLOUD ID <id>, CLOUD TOKEN <64 lowercase hex>, NET STATUS, NET RECONNECT, CONFIG SHOW, HELP");
   } else if (command[0]) Serial.println("@CAL,ERROR,UNKNOWN_COMMAND");
 }
 
@@ -818,6 +933,10 @@ void setup() {
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   Wire.setClock(I2C_CLOCK_HZ);
   Wire.setTimeOut(50);
+  oledReady = beginOled();
+  if (!OLED_ENABLED) Serial.println("OLED: disabled while main sensors are diagnosed");
+  else if (oledReady) Serial.printf("SSD1306 OLED: connected at 0x%02X\n", oledAddress);
+  else Serial.println("SSD1306 OLED: not detected (0x3C/0x3D)");
   ahtReady = aht20.begin(Wire, AHT20_ADDRESS);
   Serial.printf("AHT20 at 0x%02X: %s\n", AHT20_ADDRESS,
                 ahtReady ? "connected" : "not detected");
