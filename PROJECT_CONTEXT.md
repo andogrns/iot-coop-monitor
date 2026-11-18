@@ -8,6 +8,7 @@ Updated **18 November 2026 (Asia/Jakarta)** from local source, Git state, a publ
 - **Device evidence gap:** the backend's newest coop reading is 10 Nov (the 15 Nov bench boots were deleted at the user's request). Whether the device runs 1.2.0 and uploads now is unverified.
 - **Worker:** live `84bbab7f` (18 Nov): Settings gas-warning alerts, plus the Overview side-by-side and all-in-one views (`3af342f6`, same day). Public check: `/health` ok; the checked live assets match the local files.
 - **Git:** local `main` holds the 18 Nov Worker commit and the docs-refresh commit, not pushed. `origin/main` was `221dd07` (15 Nov) at the last fetch. The Week 1 notebook, `build_nb.py` and the 17 Nov handoff are still uncommitted.
+- **OLED:** no longer used (user decision, 18 November 2026). The notes below stay as project history. The firmware source keeps the disabled OLED code because no re-flash is planned; remove it at the next flash.
 - **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded).
 
 ## Configurable gas-warning alerts (18 November 2026, deployed as `84bbab7f`)

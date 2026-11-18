@@ -10,7 +10,7 @@ Check the actual Git branch/status and relevant source files. The handoff is a d
 
 - Active application: `firmware/coop_monitor/coop_monitor.ino`, `dashboard_protocol.h`, `dashboard_runtime.h`, and `cloud/coop-monitor-worker/`.
 - MQ-135 measures relative gas response, not calibrated ammonia ppm. Preserve this distinction in code, UI, reports, and research documents.
-- Current hardware is ESP32-C3 SuperMini, MQ-135, combined AHT20/BMP280, and SSD1306 OLED. SHT31, SD logging, Apps Script, and QuickTest sessions are historical, not active requirements.
+- Current hardware is ESP32-C3 SuperMini, MQ-135, combined AHT20/BMP280, and SSD1306 OLED. **The OLED is no longer used (18 November 2026, user decision); its notes stay as project history, and the firmware source still contains its disabled code until the next flash.** SHT31, SD logging, Apps Script, and QuickTest sessions are historical, not active requirements.
 - Preserve calibration/NVS formats, existing partitions, TLS verification, warning guards, acknowledgement/retry semantics, and desired-versus-applied configuration state unless explicitly changing them.
 
 ## Working preferences and approval boundaries

@@ -1,5 +1,11 @@
 # Coop Monitor verification
 
+## OLED no longer used: 18 November 2026 (decision only)
+
+- **Decision (user):** the OLED module is not used any more. The earlier OLED records in this file and in `PROJECT_CONTEXT.md` stay as history of how the project progressed.
+- **Firmware:** an attempt to delete the OLED code from the source was committed and pushed, then reverted the same day, because no re-flash is planned and the source should match the installed `cloudflare-1.2.0` build (OLED code present, output disabled). It compiled and the host tests passed, but that change is not in the current source. Remove the OLED code at the next flash.
+- **Not done:** no flash, device command or deployment.
+
 ## Repository and documentation check: 18 November 2026 (local, public read-only)
 
 - **Git (read-only):** `git fetch origin --prune` ran. `ls-remote` showed `main` at `221dd07` (15 Nov), the same as local `main`; `codex/quicktest` and `codex/wifi-cloud` were unchanged. Firmware files had no working-tree change against HEAD; the latest firmware commit is `14027c0` (15 Nov).
