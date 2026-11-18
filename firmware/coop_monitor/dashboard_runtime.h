@@ -368,7 +368,6 @@ inline bool saveSetting(const char *ns,const char *key,const char *value,char *t
   bool ok=*value?prefs.putString(key,value)==strlen(value):(prefs.remove(key)||!prefs.isKey(key));prefs.end();if(ok) {snprintf(target,size,"%s",value);++network.revision;netState.credentialError=false;}return ok;
 }
 inline void statusText(char *out,size_t size) {Guard lock;snprintf(out,size,"%s; wifi=%s; pending=%u; dropped=%lu; commands=%s",netState.message,netState.wifi?"connected":"offline",static_cast<unsigned>(readings.count),static_cast<unsigned long>(readings.dropped),commandsBlocked?"blocked":"ready");}
-inline void oledLine(char *out,size_t size) {Guard lock;snprintf(out,size,"%s",netState.message);}
 inline void printConfig() {Monitoring c=config();Serial.printf("@CONFIG,revision=%lu,mode=%s,manual_mv=%u,consecutive=%u,interval_s=%u\n",static_cast<unsigned long>(c.revision),c.manual?"manual":"automatic",c.manualThresholdMv,c.consecutive,c.intervalSec);}
 inline bool command(const char *text) {
   if(!mutex)return false;

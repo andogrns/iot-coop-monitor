@@ -88,10 +88,11 @@ inline void addNumber(cJSON *object, const char *key, double value) {
   if (isfinite(value)) cJSON_AddNumberToObject(object, key, value);
   else cJSON_AddNullToObject(object, key);
 }
+// Bit 6 is a reserved placeholder (the display was removed) so later bits keep their positions.
 inline const char *statusName(unsigned bit) {
   static const char *names[] = {"Warming up", "Calibration missing",
     "Calibration stabilizing", "Calibration collecting", "AHT sensor error",
-    "BMP sensor error", "OLED error", "MQ ADC high", "Gas warning"};
+    "BMP sensor error", "Reserved", "MQ ADC high", "Gas warning"};
   return names[bit];
 }
 inline char *payload(const Settings &config, const coop::Record *records, size_t count, const quick::Metadata &test) {
@@ -447,25 +448,6 @@ inline void testTick(uint32_t now, bool buttonDown) {
   if (wasRecording && quick::session.data().phase != quick::RECORDING)
     Serial.printf("@TEST,%s,saved=%lu\n", quick::phaseName(quick::session.data().phase),
       (unsigned long)quick::session.data().saved);
-}
-inline void testOledLine(char *line, size_t capacity) {
-  Guard lock;
-  const quick::Metadata &test = quick::session.data();
-  if (!queue.ready() || !quick::session.ready()) snprintf(line, capacity, "TEST STORAGE ERROR");
-  else if (test.phase == quick::RECORDING) {
-    const uint32_t elapsed = quick::session.elapsed(millis());
-    const uint32_t left = elapsed < test.durationMs ? (test.durationMs - elapsed + 999) / 1000 : 0;
-    snprintf(line, capacity, "REC %02lu:%02lu %lu", (unsigned long)(left / 60),
-      (unsigned long)(left % 60), (unsigned long)test.saved);
-  } else if (uploadRequested || uploadBusy) {
-    const char *label = "UPLOAD";
-    if (!strcmp(state.message, "WIFI OFFLINE")) label = "WIFI OFFLINE";
-    else if (!strcmp(state.message, "WAITING FOR CLOCK")) label = "WAIT CLOCK";
-    else if (strcmp(state.message, "UPLOADING") && strcmp(state.message, "UPLOAD ACKNOWLEDGED") &&
-             strcmp(state.message, "WAITING FOR TEST UPLOAD")) label = "UPLOAD ERROR";
-    snprintf(line, capacity, "%s %lu", label, (unsigned long)queue.pending());
-  }
-  else snprintf(line, capacity, "%s %lu", quick::phaseName(test.phase), (unsigned long)test.saved);
 }
 inline void announce() {
   if (!mutex) return;

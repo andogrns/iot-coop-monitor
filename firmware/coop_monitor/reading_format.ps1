@@ -6,7 +6,6 @@ $script:ReadingStatusLabels = [ordered]@{
     CAL_MISSING = 'Calibration missing'
     AHT_ERROR = 'AHT sensor error'
     BMP_ERROR = 'BMP sensor error'
-    OLED_ERROR = 'OLED error'
     MQ_ADC_HIGH = 'MQ ADC high'
     GAS_WARNING = 'Gas warning'
     OK = 'OK'
