@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Coop Monitor</title>
-<link rel="stylesheet" href="/style.css?v=d9d1320c074d">
+<link rel="stylesheet" href="/style.css?v=7757942ae92f">
 <link rel="stylesheet" href="/history.css?v=313f412b462e">
-<link rel="stylesheet" href="/console.css?v=60e8402d0b30">
+<link rel="stylesheet" href="/console.css?v=421038c3a77e">
 <link rel="stylesheet" href="/archives.css?v=fa4b9c5a154a">
-<script type="module" src="/app.js?v=0235b786e619"></script>
+<script type="module" src="/app.js?v=691f9df5d81f"></script>
 </head>
 <body>
 <header class="app-header">
@@ -74,18 +74,24 @@
       <h2 id="trend-title">Gas response trend</h2>
       <p id="trend-subtitle" class="small">Relative gas response · mV</p>
     </div>
-    <div id="trend-ranges" class="segmented" role="group" aria-label="Trend time range"><button data-hours="1" class="selected" aria-pressed="true">1h</button><button data-hours="6" aria-pressed="false">6h</button><button data-hours="12" aria-pressed="false">12h</button><button data-hours="24" aria-pressed="false">24h</button></div>
+    <div class="trend-controls">
+      <div id="trend-views" class="segmented" role="group" aria-label="Chart view"><button type="button" data-chart-view="single" class="selected" aria-pressed="true" title="One reading at a time (choose it with the tiles above)">Single</button><button type="button" data-chart-view="split" aria-pressed="false" title="Every reading on its own chart, side by side">Side by side</button><button type="button" data-chart-view="combined" aria-pressed="false" title="Every reading on one chart">All in one</button></div>
+      <div id="trend-ranges" class="segmented" role="group" aria-label="Trend time range"><button data-hours="1" class="selected" aria-pressed="true">1h</button><button data-hours="6" aria-pressed="false">6h</button><button data-hours="12" aria-pressed="false">12h</button><button data-hours="24" aria-pressed="false">24h</button></div>
+    </div>
   </div>
+  <div id="trend-series" class="series-toggles" role="group" aria-label="Readings on the chart (select to show or hide)" hidden></div>
   <div id="trend-chart" class="chart-wrap">
-    <svg id="trend-svg" role="img" aria-label="Environmental trend"></svg>
+    <svg id="trend-svg" class="trend-svg" role="img" aria-label="Environmental trend"></svg>
+    <div id="trend-panels" class="trend-panels" hidden></div>
     <div id="trend-tooltip" class="chart-tooltip" hidden></div>
     <p id="trend-empty" class="chart-empty" hidden></p>
   </div>
   <div id="trend-legend" class="chart-legend" aria-hidden="true">
-    <span class="legend-item"><span class="legend-line"></span>Reading</span>
-    <span class="legend-item"><span class="legend-threshold"></span>Warning threshold</span>
-    <span class="legend-item"><span class="legend-warning"></span>Gas warning</span>
+    <span class="legend-item" data-legend="line"><span class="legend-line"></span>Reading</span>
+    <span class="legend-item" data-legend="threshold"><span class="legend-threshold"></span>Warning threshold</span>
+    <span class="legend-item" data-legend="warning"><span class="legend-warning"></span>Gas warning</span>
   </div>
+  <p id="trend-note" class="small trend-note" hidden></p>
   <p id="trend-status" class="small" role="status" aria-live="polite">Select a device to load trends.</p>
   <div class="trend-inspector">
     <label for="trend-scrub">Step through readings</label>
@@ -248,6 +254,46 @@
 </form>
 </article>
 <article class="card" data-calibration-panel><div class="card-heading"><h2>Current calibration</h2><span class="small">Read only</span></div><p class="small" data-calibration-status>No device report yet.</p><dl class="calibration-values" data-calibration-values></dl><p class="small">Choosing a manual threshold: multiply the baseline by how far above clean air a warning should start, for example 800 mV × 1.25 = 1000 mV. Recalibrating does not change a saved manual threshold, so check it again after a new calibration.</p></article>
+<article id="alerts-card" class="card alerts-card"><div class="card-heading"><div><h2>Gas warning alerts</h2><p class="small">A message when a gas warning lasts. The server checks every 5 minutes, so it works with the dashboard closed. Applies to every device.</p></div><span id="alerts-dirty" class="badge warn dot" hidden>Unsaved changes</span></div>
+<div id="alerts-delivery" class="sync-status muted" role="status" aria-live="polite"></div>
+<p id="alerts-loading" class="small">Loading alert settings…</p>
+<form id="alerts-form" class="settings-form alerts-form" novalidate hidden>
+<label class="alerts-switch"><input id="alerts-enabled" type="checkbox"><span><span class="choice-title">Send gas warning alerts</span><span class="choice-text">Off: no gas warning messages are sent. Offline and back-online messages still use the service below.</span></span></label>
+<div class="alerts-layout">
+<div class="alerts-main">
+<fieldset class="settings-group"><legend>Where to send</legend>
+<div class="field-row settings-row">
+<div class="field"><label for="alerts-channel">Send via</label><select id="alerts-channel" aria-describedby="alerts-channel-help"></select><p id="alerts-channel-help" class="field-help">Only Discord for now. Other services can be added later.</p></div>
+<div class="field"><label for="alerts-discord-channel">Discord channel ID <span class="optional">(optional)</span></label><input id="alerts-discord-channel" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="24" placeholder="Bot’s default channel" aria-describedby="alerts-discord-help alerts-discord-error"><p id="alerts-discord-help" class="field-help"></p><p id="alerts-discord-error" class="field-error" role="alert"></p></div>
+</div>
+<div class="field alerts-narrow"><label for="alerts-mention">Mention</label><select id="alerts-mention" aria-describedby="alerts-mention-help"><option value="none">Nobody</option><option value="here">@here (members who are online)</option><option value="everyone">@everyone</option></select><p id="alerts-mention-help" class="field-help">A mention notifies phones even when the channel is muted. Only the warning and its reminders mention; the end message never does. The bot needs the “Mention @everyone, @here and All Roles” permission, otherwise the text appears without notifying.</p></div>
+</fieldset>
+<fieldset class="settings-group"><legend>When to send</legend>
+<div class="field-row settings-row">
+<div class="field"><label for="alerts-after">Send after the warning has lasted (minutes)</label><input id="alerts-after" type="number" inputmode="numeric" min="5" max="720" step="1" required aria-describedby="alerts-after-help alerts-after-error"><div class="alerts-presets" role="group" aria-label="Common wait times"><button type="button" class="quiet small" data-minutes="15">15 min</button><button type="button" class="quiet small" data-minutes="30">30 min</button><button type="button" class="quiet small" data-minutes="60">1 h</button><button type="button" class="quiet small" data-minutes="120">2 h</button></div><p id="alerts-after-help" class="field-help">5–720 minutes of unbroken warning.</p><p id="alerts-after-error" class="field-error" role="alert"></p></div>
+<div class="field"><label for="alerts-remind">Remind while it continues</label><select id="alerts-remind" aria-describedby="alerts-remind-help"><option value="0">No reminders</option><option value="30">Every 30 minutes</option><option value="60">Every hour</option><option value="120">Every 2 hours</option><option value="180">Every 3 hours</option><option value="360">Every 6 hours</option><option value="720">Every 12 hours</option></select><p id="alerts-remind-help" class="field-help">Repeats the warning message, with the time so far.</p></div>
+</div>
+<p id="alerts-timing" class="settings-summary" aria-live="polite"></p>
+</fieldset>
+<fieldset class="settings-group"><legend>Message</legend>
+<div class="field"><div class="alerts-label-row"><label for="alerts-template">Warning message</label><span id="alerts-template-count" class="small"></span></div><textarea id="alerts-template" rows="6" maxlength="1500" spellcheck="true" aria-describedby="alerts-template-help alerts-template-error"></textarea><p id="alerts-template-help" class="field-help">Discord formatting works, for example **bold**. Values in {braces} are filled in when the message is sent.</p><p id="alerts-template-error" class="field-error" role="alert"></p></div>
+<div class="alerts-vars"><p class="small" id="alerts-vars-label">Insert a value at the cursor:</p><div id="alerts-vars" class="alerts-chips" role="group" aria-labelledby="alerts-vars-label"></div></div>
+<label class="alerts-check"><input id="alerts-send-ended" type="checkbox"> Also send a message when the warning ends</label>
+<div id="alerts-ended-field" class="field"><div class="alerts-label-row"><label for="alerts-ended">End message</label><span id="alerts-ended-count" class="small"></span></div><textarea id="alerts-ended" rows="2" maxlength="1500" spellcheck="true" aria-describedby="alerts-ended-error"></textarea><p id="alerts-ended-error" class="field-error" role="alert"></p></div>
+<button id="alerts-defaults" type="button" class="quiet small">Restore the default texts</button>
+</fieldset>
+</div>
+<aside class="alerts-preview-panel" aria-labelledby="alerts-preview-title">
+<div class="alerts-preview-head"><h3 id="alerts-preview-title" class="section-title">Preview</h3><div id="alerts-preview-kind" class="segmented" role="group" aria-label="Preview message"><button type="button" class="selected" aria-pressed="true" data-kind="warning">Warning</button><button type="button" aria-pressed="false" data-kind="ended">End</button></div></div>
+<div id="alerts-preview" class="alerts-preview" aria-live="polite"></div>
+<p id="alerts-preview-note" class="small"></p>
+<p class="small">The last line is always added: MQ-135 gives a relative gas response, not ammonia ppm.</p>
+</aside>
+</div>
+<div class="settings-actions"><button id="alerts-save" class="primary" disabled>Save alert settings</button><button id="alerts-discard" type="button" class="quiet" disabled>Discard changes</button><button id="alerts-test" type="button" class="alerts-test">Send test message</button></div>
+<p class="small">“Send test message” uses the text above, even unsaved, and the selected device’s latest reading. It is marked as a test and never notifies anyone.</p>
+</form>
+</article>
 </div>
 </section>
 <section id="archives" class="tab" aria-label="Archives" hidden>

@@ -51,7 +51,7 @@ test('one message after an hour of continuous warning, then none while it contin
   const post = stub.posts()[0];
   assert.match(post.url, /\/channels\/555\/messages$/);
   assert.equal(post.auth, 'Bot test-token');
-  assert.match(post.body.content, /Gas warning ongoing for over 1 hour/);
+  assert.match(post.body.content, /Gas warning ongoing for 1 h 1 min/);
   assert.match(post.body.content, /not calibrated ammonia ppm/);
   assert.match(post.body.content, new RegExp(`<t:${Math.floor((NOW - 61 * MIN) / 1000)}:f>`));
   assert.deepEqual(post.body.allowed_mentions, { parse: [] });

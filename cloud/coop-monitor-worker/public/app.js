@@ -1,5 +1,5 @@
 import { createHistoryExport } from './history-export.js?v=bbaff202f06f';
-import { METRICS, createTrends } from './trends.js?v=abe112faf2d2';
+import { METRICS, createTrends } from './trends.js?v=8ebf1b0bab53';
 import { createManualArchives } from './manual-archive.js?v=42f0aa27fd9a';
 import { createArchiveLibrary } from './archive-library.js?v=ac6e99daf55f';
 import { createHistorySelection } from './history-selection.js?v=08b600a0173d';
@@ -7,6 +7,7 @@ import { describeStatus, formatBytes, formatDateTime, formatNumber, hasStatus } 
 import { formatDate, formatTime } from './format.js?v=0242141ec619';
 import { badge, banner, clearRelativeTime, confirmDialog, el, emptyState, notice, setClock, setRelativeTime } from './ui.js?v=c84da061d886';
 import { createConsoleTab, createSettingsTab } from './console.js?v=589f5fe5d83c';
+import { createAlertsTab } from './alerts.js?v=4e5e1dd39dd2';
 
 // ===== Shared state, API and helpers =====
 const $ = id => document.getElementById(id);
@@ -25,7 +26,7 @@ const pageHeadings = {
   overview: ['Overview', 'How your coop is doing right now.'],
   history: ['History', 'Browse past readings and download them as CSV.'],
   console: ['Device console', 'Send commands to the monitor and read its messages.'],
-  settings: ['Settings', 'Warning and sampling settings. Changes apply when the device next checks in.'],
+  settings: ['Settings', 'Warning, sampling and alert settings.'],
   archives: ['Archives', 'Download older readings and keep finished experiments together.'],
 };
 
@@ -75,6 +76,7 @@ async function openTab(name) {
   applyTab(name); tabOpened = true;
   if (active === 'overview') { render(); trends.draw(); } else trends.stop();
   try {
+    if (active === 'settings') alertsTab.load().catch(e => notice(e.message, 'error')); // global, not per device
     if (!current()) return;
     if (active === 'history') { historySelection.countSelection(); await loadHistory(true, true); }
     if (active === 'settings') fillSettings(current());
@@ -164,8 +166,9 @@ const WARNING_GUARDS = ['WARMUP', 'CAL_STABILIZING', 'CAL_COLLECTING', 'CAL_MISS
 function renderTiles(d) {
   const r = d.latestReading, raw = latestStatus(d), status = describeStatus(raw), root = $('readings');
   if (!root.children.length) for (const m of METRICS) {
-    const tile = el('button', 'metric-tile' + (m.key === 'mqMv' ? ' selected' : ''));
-    tile.type = 'button'; tile.dataset.metric = m.key; tile.setAttribute('aria-pressed', String(m.key === 'mqMv'));
+    const charted = trends.selectedMetric() === m.key;
+    const tile = el('button', 'metric-tile' + (charted ? ' selected' : ''));
+    tile.type = 'button'; tile.dataset.metric = m.key; tile.setAttribute('aria-pressed', String(charted));
     tile.title = `Show ${m.label.toLowerCase()} on the chart`;
     const top = el('span', 'metric-top'); top.append(el('span', 'metric-label', m.label));
     if (m.key === 'mqMv') top.append(el('span', 'badge'));
@@ -553,8 +556,9 @@ async function loadConsole() { await refresh(); }
 
 // ===== Settings tab ===== (UI in console.js; the form is refilled only on device change or tab open)
 const settingsTab = createSettingsTab({ send, current, connection, reload: () => refresh() });
+const alertsTab = createAlertsTab({ api, send, current, now: serverNow });
 function renderSettingsStatus(d) {
-  settingsTab.status(d); consoleTab.sync(d);
+  settingsTab.status(d); consoleTab.sync(d); alertsTab.sync(d);
   if (formDevice !== selected) { fillSettings(d); formDevice = selected; }
 }
 function fillSettings(d) { settingsTab.fill(d); }

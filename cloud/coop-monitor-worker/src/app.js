@@ -4,6 +4,7 @@ import { exchange, snapshot, history, logs, setConfig, enqueueCommand, commandHi
 import { maintenance, archiveList, archiveDownload } from './archive.js';
 import { gasAlerts, GAS_ALERT_CRON } from './gas-alerts.js';
 import { deviceAlerts } from './device-alerts.js';
+import { alertOverview, saveAlertSettings, sendTestAlert } from './notify.js';
 import { archiveFolders, archiveFiles } from './archive-folders.js';
 import { archiveSelection, startManualArchive, continueManualArchive } from './manual-archive.js';
 import { createLoginThrottle } from './login-throttle.js';
@@ -65,6 +66,9 @@ async function route(request,env) {
     if(path==='/api/archive' && method==='GET')return archiveDownload(env,url.searchParams.get('key')??'');
     if(path==='/api/devices' && method==='POST')return json(await registerDevice(env,await body(request)),201);
     if(path==='/api/maintenance' && method==='POST')return json(await maintenance(env));
+    if(path==='/api/alerts' && method==='GET')return json(await alertOverview(env));
+    if(path==='/api/alerts' && method==='PUT')return json(await saveAlertSettings(env,await body(request)));
+    if(path==='/api/alerts/test' && method==='POST')return json(await sendTestAlert(env,await body(request)));
     const match=/^\/api\/devices\/([A-Za-z0-9_-]{1,64})\/(config|commands|uploads)$/.exec(path);
     if(match){const deviceId=id(match[1]);
       if(match[2]==='config' && method==='PUT')return json(await setConfig(env,deviceId,await body(request)));

@@ -38,3 +38,25 @@ test('display reduction preserves isolated extrema and segment endpoints',()=>{
 test('time filtering uses server-anchored time and preserves boot-specific identities',()=>{
  const a=sample(1),b=sample(1,to-5000,900,'other');a.sampledAt='2020-01-01T00:00:00Z';assert.equal(mergeReadings([a],[a,b],to-20000,to).length,2);
 });
+test('chart views: per-reading ranges keep data min/max and widen flat data to the minimum span',async()=>{
+ const {CHART_VIEWS,valueRange}=await import('../public/trends.js');
+ assert.deepEqual(CHART_VIEWS,['single','split','combined']);
+ const rows=[sample(1,to-3000,140),sample(2,to-2000,null),sample(3,to-1000,170)];
+ assert.deepEqual(valueRange(rows,'mqMv',10),{min:140,max:170,lo:140,hi:170});
+ const flat=[sample(1,to-2000,1008.2),sample(2,to-1000,1008.6)].map(r=>({...r,pressureHpa:r.mqMv}));
+ const r=valueRange(flat,'pressureHpa',2);assert.equal(r.min,1008.2);assert.equal(r.max,1008.6);assert.ok(Math.abs(r.lo-1007.4)<1e-9&&Math.abs(r.hi-1009.4)<1e-9);
+ assert.equal(valueRange([sample(1,to,null)],'mqMv',10),null);assert.deepEqual(valueRange([sample(1,to,0)],'mqMv'),{min:0,max:0,lo:0,hi:0});
+});
+test('chart views: hover picks the nearest reading in time, the later one on a tie (as before)',async()=>{
+ const {nearestIndex}=await import('../public/trends.js');
+ const rows=[sample(1,to-10000),sample(2,to-5000),sample(3,to)];
+ assert.equal(nearestIndex([],to),-1);assert.equal(nearestIndex(rows,to-60000),0);assert.equal(nearestIndex(rows,to+60000),2);
+ assert.equal(nearestIndex(rows,to-6000),1);assert.equal(nearestIndex(rows,to-2600),1);assert.equal(nearestIndex(rows,to-2500),2);
+});
+test('chart views: direct labels are pushed apart and kept inside the plot',async()=>{
+ const {spreadLabels}=await import('../public/trends.js');
+ const out=spreadLabels([{k:'a',y:50},{k:'b',y:52},{k:'c',y:5},{k:'d',y:199}],14,10,190);
+ assert.deepEqual(out.map(i=>i.k),['c','a','b','d']);
+ for(let i=1;i<out.length;i++)assert.ok(out[i].y-out[i-1].y>=14);
+ assert.ok(out[0].y>=10&&out.at(-1).y<=190);assert.deepEqual(out.map(i=>i.y),[10,50,64,190]);
+});

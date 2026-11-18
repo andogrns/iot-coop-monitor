@@ -1,6 +1,8 @@
 // Discord notification when a device stops exchanging data, and once more when it is back.
 // Runs on the gas-alert cron. Reads the latest stored device state; writes D1 only when a message is sent.
-import { send, name } from './gas-alerts.js';
+// Uses the service and channel chosen under Settings > Gas warning alerts, but never mentions anyone.
+import { deviceName as name } from '../public/alert-settings.js';
+import { channelReady, deliver, loadAlertSettings } from './notify.js';
 import { capacity } from './storage.js';
 
 const MINUTE = 60000;
@@ -56,7 +58,8 @@ export function onlineMessage(device, state, stored, decision, now) {
 }
 
 export async function deviceAlerts(env, { fetchImpl = fetch, now = Date.now() } = {}) {
-  if (!env.DISCORD_BOT_TOKEN) return { status: 'discord_not_configured' };
+  const { settings } = await loadAlertSettings(env);
+  if (!channelReady(env, settings)) return { status: `${settings.channel}_not_configured` };
   // While uploads are paused the backend stores no new state, so silence would be misread as offline.
   if ((await capacity(env)).paused) return { status: 'uploads_paused' };
   const afterMs = offlineAfterMs(env), results = [];
@@ -70,11 +73,11 @@ export async function deviceAlerts(env, { fetchImpl = fetch, now = Date.now() } 
       const stored = row ? JSON.parse(row.value_json) : null;
       const decision = evaluateOffline(state, stored, now, afterMs);
       if (decision.action === 'offline') {
-        await send(env, fetchImpl, offlineMessage(device, state, decision));
+        await deliver(env, fetchImpl, offlineMessage(device, state, decision), settings, { kind: 'offline', now });
         await stmt(env.DB, 'INSERT INTO system_state(key,value_json,updated_at) VALUES (?,?,?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json,updated_at=excluded.updated_at',
           stateKey(device.device_id), JSON.stringify({ lastSeen: decision.seen, bootId: state.bootId, notifiedAt: now }), iso(now)).run();
       } else if (decision.action === 'online') {
-        await send(env, fetchImpl, onlineMessage(device, state, stored, decision, now));
+        await deliver(env, fetchImpl, onlineMessage(device, state, stored, decision, now), settings, { kind: 'online', now });
         await stmt(env.DB, 'DELETE FROM system_state WHERE key=?', stateKey(device.device_id)).run();
       }
       results.push({ deviceId: device.device_id, action: decision.action, reason: decision.reason });

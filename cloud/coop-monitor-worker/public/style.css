@@ -71,6 +71,9 @@
   --muted: #526379;   --muted-bg: #e9eef4;
   --info: #2f5bc4;    --info-bg: #e4ebfa;
   --danger-solid: #b3261e; --on-danger: #ffffff;
+  /* Chart series (Overview "Side by side" / "All in one"), validated categorical order:
+     gas, temperature, humidity, pressure. Pressure is also dashed (orange/yellow are close for CVD). */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
 
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
@@ -102,6 +105,7 @@
     --muted: #a8b9cf;   --muted-bg: #26344a;
     --info: #9abaff;    --info-bg: #263b5e;
     --danger-solid: #ff8f8a; --on-danger: #2b0b0c;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
     --shadow: 0 10px 30px rgba(0, 0, 0, .45);
   }
 }
@@ -356,18 +360,48 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
 .technical-details summary .small { font-weight: 400; margin-left: var(--space-2); }
 .technical-details pre { margin-top: var(--space-3); }
 
+.trend-controls { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
 .chart-wrap { position: relative; width: 100%; height: 320px; margin: var(--space-4) 0 var(--space-2); }
+.chart-wrap.is-split { height: auto; }
 #trend-svg { width: 100%; height: 100%; display: block; touch-action: pan-y; }
-#trend-svg text { fill: var(--sub); font: 11px var(--font); }
-#trend-svg .chart-grid { stroke: var(--line); stroke-width: 1; }
-#trend-svg .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-#trend-svg .chart-dot { fill: var(--accent); }
-#trend-svg .chart-focus { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
-#trend-svg .chart-guide { stroke: var(--sub); stroke-dasharray: 3 4; stroke-width: 1; }
-#trend-svg .chart-threshold { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 6 4; }
-#trend-svg text.chart-threshold-label { fill: var(--danger); font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
-#trend-svg .chart-warning { fill: var(--danger); opacity: .14; }
-#trend-svg .chart-warning-tick { fill: var(--danger); }
+.trend-svg text { fill: var(--sub); font: 11px var(--font); }
+.trend-svg .chart-grid { stroke: var(--line); stroke-width: 1; }
+.trend-svg .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend-svg .chart-dot { fill: var(--accent); }
+.trend-svg .chart-focus { fill: var(--accent); stroke: var(--panel); stroke-width: 2; }
+.trend-svg .chart-guide { stroke: var(--sub); stroke-dasharray: 3 4; stroke-width: 1; }
+.trend-svg .chart-threshold { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.trend-svg text.chart-threshold-label { fill: var(--danger); font-weight: 600; paint-order: stroke; stroke: var(--panel); stroke-width: 4px; stroke-linejoin: round; }
+.trend-svg .chart-warning { fill: var(--danger); opacity: .14; }
+.trend-svg .chart-warning-tick { fill: var(--danger); }
+/* Series identity (multi-reading views): colour follows the reading, never its position. */
+.series-mqMv { --series: var(--series-1); }
+.series-ahtTemperatureC { --series: var(--series-2); }
+.series-humidityPct { --series: var(--series-3); }
+.series-pressureHpa { --series: var(--series-4); }
+.trend-svg .chart-line.series { stroke: var(--series); }
+.trend-svg .chart-dot.series, .trend-svg .chart-focus.series { fill: var(--series); }
+#trend-svg .chart-line.series-pressureHpa, .series-line.series-pressureHpa { stroke-dasharray: 6 3; }
+.series-line { stroke: var(--series); stroke-width: 2.5; stroke-linecap: round; }
+.series-swatch { flex: none; width: 12px; height: 3px; border-radius: 2px; background: var(--series); }
+.trend-svg text.chart-direct-label { fill: var(--ink); font-weight: 600; }
+.trend-svg.has-focus .chart-line.series:not(.is-focus) { opacity: .18; }
+.trend-svg.has-focus .chart-line.is-focus { stroke-width: 2.5; }
+.series-toggles { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-4); }
+.series-toggle { min-height: 32px; padding: 4px 12px 4px 10px; gap: 6px; font-size: 12px; font-weight: 500; border-radius: var(--radius-pill); }
+.series-toggle .series-range { color: var(--sub); font-weight: 400; font-variant-numeric: tabular-nums; }
+.series-toggle[aria-pressed=true] { border-color: var(--line-strong); background: var(--panel); }
+.series-toggle.off { color: var(--sub); border-style: dashed; background: transparent; }
+.series-toggle.off .series-key { opacity: .3; }
+.series-toggle.off .series-name { text-decoration: line-through; }
+.trend-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-5); }
+.trend-panel { margin: 0; min-width: 0; }
+.panel-caption { display: flex; align-items: center; gap: 6px; min-height: 22px; font-size: 13px; }
+.panel-name { font-weight: 600; color: var(--ink); }
+.panel-unit { color: var(--sub); font-size: 12px; }
+.panel-value { margin-left: auto; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.panel-svg { width: 100%; height: 180px; display: block; touch-action: pan-y; }
+.trend-note { margin: var(--space-2) 0 0; }
 .chart-tooltip {
   position: absolute; z-index: 2; top: 0; left: 0; pointer-events: none;
   transform: translate(var(--tx, 0px), var(--ty, 0px));
@@ -377,6 +411,10 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
 .chart-tooltip .tip-time { color: var(--sub); }
 .chart-tooltip .tip-value { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .chart-tooltip .badge { margin-top: 4px; }
+.chart-tooltip.multi { max-width: 260px; }
+.chart-tooltip .tip-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.chart-tooltip .tip-name { flex: 1; color: var(--sub); }
+.chart-tooltip .tip-val { font-weight: 600; white-space: nowrap; }
 .chart-empty { position: absolute; inset: 35% 10% auto; margin: 0; text-align: center; background: var(--panel); padding: var(--space-4); font-size: 13px; }
 .chart-legend { display: flex; gap: var(--space-4); flex-wrap: wrap; font-size: 12px; color: var(--sub); }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; }
@@ -427,6 +465,9 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
   .toolbar label, .toolbar .field { flex-basis: 100%; min-width: 0; }
   .toolbar button { width: 100%; }
   .chart-wrap { height: 250px; }
+  .trend-panels { grid-template-columns: minmax(0, 1fr); }
+  .panel-svg { height: 150px; }
+  .trend-controls { justify-content: flex-start; }
   .dialog-actions button { flex: 1; }
   .banner { flex-wrap: wrap; }
   .banner button { margin-left: 36px; }
