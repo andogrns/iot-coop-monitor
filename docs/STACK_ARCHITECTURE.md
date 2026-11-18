@@ -1,6 +1,6 @@
 # Coop Monitor stack architecture
 
-Source reviewed **5 November 2026 (Asia/Jakarta)** on branch `main`, HEAD `b4e5d30`, including uncommitted implementation changes. This describes implemented code/configuration. Deployment and physical observations retain their own dates in [verification](../VERIFICATION.md) and [deployment record](../cloud/coop-monitor-worker/DEPLOYMENT.md).
+Source reviewed **18 November 2026 (Asia/Jakarta)** on branch `main`, after the 18 November Worker and documentation commits (`git log` gives hashes). This describes implemented code/configuration. Deployment and physical observations retain their own dates in [verification](../VERIFICATION.md) and [deployment record](../cloud/coop-monitor-worker/DEPLOYMENT.md).
 
 ## End-to-end flow
 
@@ -11,6 +11,7 @@ flowchart TD
   LOOP --> OLED[Optional USB output / OLED disabled]
   LOOP --> RAM[Bounded reading and log RAM buffers]
   NVS[NVS calibration, provisioning, settings and command receipts] <--> LOOP
+  RAM --> SD[microSD backup, flushed every 15 min, read back and verified]
   RAM --> NET[Separate FreeRTOS Wi-Fi / NTP / verified TLS task]
   NET -->|POST protocol-1 exchange| WORKER[Cloudflare Worker]
   WORKER -->|Acknowledgements, desired settings, commands and pause status| NET
@@ -31,14 +32,14 @@ The ESP initiates exchanges; the Worker does not open a connection to the device
 | MQ-135 | Relative gas response; 5 V heater/module, two 10 kOhm divider resistors, AO to GPIO3, DO unused | [wiring](../firmware/coop_monitor/WIRING.md) |
 | AHT20/BMP280 | Temperature/humidity and temperature/pressure respectively; 3V3, shared I2C GPIO4 SDA/GPIO5 SCL | [sketch](../firmware/coop_monitor/coop_monitor.ino) |
 | SSD1306 | 128x64 I2C OLED on the same bus; support retained but output disabled; intentionally disconnected in last recorded test | [sketch](../firmware/coop_monitor/coop_monitor.ino) |
-| Firmware | `cloudflare-1.0.4`, protocol 1; Arduino ESP32 core 3.3.12 in the recorded build | [protocol types](../firmware/coop_monitor/dashboard_protocol.h), [build guide](../firmware/coop_monitor/README.md) |
+| Firmware | `cloudflare-1.2.0`, protocol 1; microSD backup from 1.1.0, remote SD commands from 1.2.0; Arduino ESP32 core 3.3.12 in the recorded build | [protocol types](../firmware/coop_monitor/dashboard_protocol.h), [build guide](../firmware/coop_monitor/README.md) |
 | Firmware libraries | Local checked AHT20/BMP280 readers; Adafruit SSD1306, GFX and BusIO; core supplies Wire, Preferences, Wi-Fi, HTTP/TLS and cJSON | [firmware guide](../firmware/coop_monitor/README.md) |
 | Worker | `src/index.ts` re-exports JavaScript `app.js`; routing, validation, auth, storage and archives | [entry](../cloud/coop-monitor-worker/src/index.ts), [routes](../cloud/coop-monitor-worker/src/app.js) |
 | D1 / R2 | SQLite-based recent storage and private gzip object storage, through Worker bindings | [config](../cloud/coop-monitor-worker/wrangler.jsonc) |
 | Frontend | Signal, vanilla HTML/CSS/JavaScript and Canvas trends; same-origin Worker assets | [HTML](../cloud/coop-monitor-worker/public/index.html), [app](../cloud/coop-monitor-worker/public/app.js), [trends](../cloud/coop-monitor-worker/public/trends.js) |
 | Toolchain | Node v24.19.0 verified locally; `node:sqlite` tests; Wrangler pinned/locally checked at 4.148.0, pnpm lockfile | [package](../cloud/coop-monitor-worker/package.json), [wrapper](../cloud/coop-monitor-worker/cf.ps1) |
 
-MicroSD, SHT31, Apps Script and QuickTest are historical workflows. The active build has no OTA, RTC module, battery monitor, fan/relay or buzzer output. The existing 4 MB partition layout retains one 2 MiB application slot and the old filesystem region; active Cloudflare firmware does not mount/format that legacy filesystem.
+The microSD backup is active code from firmware 1.1.0 (see the persistence table). SHT31, Apps Script and QuickTest are historical workflows. The active build has no OTA, RTC module, battery monitor, fan/relay or buzzer output. The existing 4 MB partition layout retains one 2 MiB application slot and the old filesystem region; active Cloudflare firmware does not mount/format that legacy filesystem.
 
 ## Sensing and timing
 
@@ -66,6 +67,7 @@ The last recorded device interval was five seconds, revision 4 (4 November); thi
 | Location | Contents | Survival / limits |
 |---|---|---|
 | RAM | 64 readings, 16 logs, in-flight exchange | Drop oldest on overflow; reboot/power loss discards pending data |
+| microSD backup (1.1.0+) | Readings and device logs buffered in 4 KiB RAM, appended as whole 512-byte sectors every 15 min or at 3 KiB; new `/coop/bNNNNN.csv` each boot; each write read back and compared | Survives reboot; power loss can lose the unflushed RAM part (about 3 min); not uploaded to the cloud (no backfill) |
 | NVS `coopcal` | Accepted calibration; replacement mq135-02 uses isolated mq02_* keys, old profile retained | Survives ordinary reboot/update; exported separately before authorized flashing |
 | NVS `coopnet` / `coopcloud` | Wi-Fi / device ID, token and endpoint | Secrets; USB provisioning only; separate from owner key |
 | NVS `coopcfg` / `coopcmd` | CRC-protected monitoring settings / 12-entry command receipt journal | Preserve for configuration and replay/recovery semantics |

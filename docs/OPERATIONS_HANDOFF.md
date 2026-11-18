@@ -1,19 +1,19 @@
 # Coop Monitor operations handoff
 
-Prepared **5 November 2026 (Asia/Jakarta)** for the person operating the prototype and preserving study data. Read [project context](../PROJECT_CONTEXT.md) for dated status and [stack architecture](STACK_ARCHITECTURE.md) for how data moves. Development and acceptance ownership are in the [project handoff](PROJECT_HANDOFF.md).
+Refreshed **18 November 2026 (Asia/Jakarta)** for the person operating the prototype and preserving study data. Read [project context](../PROJECT_CONTEXT.md) for dated status and [stack architecture](STACK_ARCHITECTURE.md) for how data moves. Development and acceptance ownership are in the [project handoff](PROJECT_HANDOFF.md).
 
 ## What the operator receives
 
 | Item | Known setup / boundary |
 |---|---|
-| Monitor | ESP32-C3 SuperMini, MQ-135, replacement AHT20/BMP280; OLED disabled/disconnected; stable USB power and 2.4 GHz Wi-Fi |
+| Monitor | ESP32-C3 SuperMini, MQ-135, replacement AHT20/BMP280; OLED disabled/disconnected; microSD backup (firmware 1.1.0+); stable USB power and 2.4 GHz Wi-Fi |
 | Dashboard | [Coop Monitor](https://coop-monitor-worker.coop-monitor-worker.workers.dev/), private owner sign-in |
 | Device identity | `coop-monitor-01`; configured HTTPS protocol-1 exchange at the same origin |
 | Cloud resources | Worker `coop-monitor-worker`, D1 `coop-monitor-db`, private R2 `coop-monitor-archives`; existing resources are reused |
 | Data | Searchable D1 retention setting 30 days; private gzip archives; no automatic archive deletion configured |
-| Firmware source | `cloudflare-1.0.4`; installed version must be checked during the next authorized device session |
+| Firmware source | `cloudflare-1.2.0`; last recorded install 15 November by USB. The installed version must be checked during the next authorized device session |
 
-Latest recorded deployment is 1 November, multipart CSV export. Last recorded device state on 4 November was five-second sampling, revision 4, mq135-02 calibration missing; default source interval remains two seconds. Replacement-sensor and closed-lid tests each passed short acquisition checks; Wi-Fi was intentionally off and OLED disconnected. Follow the [field launch handoff](FIELD_RUN_2026-11-05.md) for the planned seven-day run: actual installation/start and fresh persisted uploads are not recorded. Today's device/cloud state was not checked. A populated screen or `/health` response does not prove current uploads.
+Latest recorded deployment is 18 November (`84bbab7f`: gas-warning alert settings in Settings > Gas warning alerts; Overview trend views the same day). The last full settings readback was on 4 November: five-second sampling, revision 4, mq135-02 calibration missing; the default source interval remains two seconds. No real Discord delivery has been observed yet. Replacement-sensor and closed-lid tests each passed short acquisition checks; Wi-Fi was intentionally off and OLED disconnected. Follow the [field launch handoff](FIELD_RUN_2026-11-05.md) for the planned seven-day run: actual installation/start and fresh persisted uploads are not recorded. Today's device/cloud state was not checked. A populated screen or `/health` response does not prove current uploads.
 
 **MQ-135 reports relative gas response.** A warning is a prototype indication, not a validated ammonia concentration or a substitute for independent environmental measurements.
 

@@ -1,6 +1,121 @@
 # Coop Monitor project context
 
-Updated **5 November 2026 (Asia/Jakarta)** from local source and existing dated evidence. This is the session starting point for people and coding agents. The previous context is preserved in [project history](docs/PROJECT_HISTORY.md); import provenance remains in [CODEX_CONTEXT_IMPORT.md](docs/CODEX_CONTEXT_IMPORT.md).
+Updated **18 November 2026 (Asia/Jakarta)** from local source, Git state, a public read-only check of the live Worker and dated evidence. This is the session starting point for people and coding agents. The previous context is preserved in [project history](docs/PROJECT_HISTORY.md); import provenance remains in [CODEX_CONTEXT_IMPORT.md](docs/CODEX_CONTEXT_IMPORT.md).
+
+## Current state at a glance (18 November 2026)
+
+- **Firmware source:** `cloudflare-1.2.0` (commit `14027c0`, 15 Nov): microSD backup and remote SD commands. Last recorded install: USB upload on 15 Nov, checked over Serial. Not read since.
+- **Device evidence gap:** the backend's newest coop reading is 10 Nov (the 15 Nov bench boots were deleted at the user's request). Whether the device runs 1.2.0 and uploads now is unverified.
+- **Worker:** live `84bbab7f` (18 Nov): Settings gas-warning alerts, plus the Overview side-by-side and all-in-one views (`3af342f6`, same day). Public check: `/health` ok; the checked live assets match the local files.
+- **Git:** local `main` holds the 18 Nov Worker commit and the docs-refresh commit, not pushed. `origin/main` was `221dd07` (15 Nov) at the last fetch. The Week 1 notebook, `build_nb.py` and the 17 Nov handoff are still uncommitted.
+- **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded).
+
+## Configurable gas-warning alerts (18 November 2026, deployed as `84bbab7f`)
+
+User (in Indonesian) asked for the Discord gas-warning message to be set from the dashboard: which service (Discord for now, more later), the message text, and after how long a warning it is sent; and invited fitting additions. **Implemented, tested and deployed** the same day after the user asked to deploy directly (Worker `84bbab7f-8749-4e3e-9472-c33f847a48e4`, see DEPLOYMENT.md). Not committed to Git. Firmware, device protocol and migrations unchanged.
+
+- **Dashboard:** new full-width card **Settings > Gas warning alerts** (`public/alerts.js`, styles in `console.css`). Global, not per device. Fields: on/off; send via (Discord only; shows "not connected" without the bot token); optional Discord channel ID (overrides `DISCORD_CHANNEL_ID`); mention (nobody / @here / @everyone); wait time 5–720 min with 15/30/60/120 presets; reminders while it continues (none, 30 min … 12 h); warning message and optional end message with `{variable}` chips (device, elapsed, duration, since, since_relative, time, gas_mv, threshold_mv, ratio, temperature, humidity, status); live preview (Warning/End) using the selected device's latest reading; delivery status (not connected / last sent / last failure in plain words); **Send test message** (unsaved text, marked as a test, never pings, 10 s cooldown); unsaved-changes badge, Discard, Restore default texts.
+- **Additions made on own initiative (user invited them):** reminders, end-message toggle, mentions, channel ID, test message, delivery status, preview.
+- **Backend:** `src/notify.js` (settings load/save with revision check, sender registry for future services, Discord sender, delivery record, test send), `public/alert-settings.js` (validation, variables, message building; shared by Worker and dashboard), `src/gas-alerts.js` now reads the saved settings (wait time, reminders, end message, mention), `src/device-alerts.js` uses the chosen service/channel without mentions. New routes `GET/PUT /api/alerts`, `POST /api/alerts/test` (API.md). State in `system_state` keys `alert_settings` and `alert_delivery`; no migration.
+- **Kept:** detection rules unchanged (firmware `GAS_WARNING` continuous, gap > 10 min or a normal reading restarts the count, stale device neither sends nor clears, failed sends retried next run). Every gas message ends with a fixed line: MQ-135 relative gas response, not calibrated ammonia ppm. Without saved settings the behaviour equals the old one apart from the default wording ("ongoing for 1 h 1 min" instead of "for over 1 hour") and that footer line.
+- **Mentions caveat:** @here/@everyone only notify if the bot has "Mention @everyone, @here and All Roles" in that channel; the original invite gave View Channels + Send Messages only.
+- **Read cost:** the wait time is capped at 720 min because each 5-minute check reads up to (wait + 20 min) of minute blocks per device.
+- **Open:** user review of the live card (the agent does not sign in), the bot invitation (still the 13 November open item), a real Discord test message and a real field alert. `version-assets.mjs` already run.
+
+## Overview chart views: side by side and all in one (18 November 2026, deployed as `3af342f6`)
+
+User (in Indonesian) asked for two more viewing modes in the Overview tab: every data type side by side, and every data type on one graph. The user checked the local preview, approved it and authorized deployment the same day. **Implemented and live** in `cloud/coop-monitor-worker/public/` (`trends.js`, `index.html`, `style.css`, one line in `app.js`); backend, API and firmware unchanged.
+
+- **View switch** on the trend card: **Single** (the previous chart, unchanged; the reading tiles still choose it), **Side by side** (2 x 2 small multiples, one column on phones: gas, temperature, humidity, pressure, each on its own y-axis with a shared, aligned time axis; gas keeps the threshold line and warning shading; hovering any chart moves one cursor across all four and the captions show the values), **All in one** (one chart, each line indexed to its own Low–High range in the window, never two y-scales; buttons above show each reading's actual min–max and hide/show it, hover fades the others; tooltip lists actual values; direct labels at the right edge on wide screens; gas warning shading kept).
+- Clicking a reading tile returns to Single for that reading. The chosen view and hidden lines are remembered per browser (`localStorage`, wrapped in try/catch).
+- Series colours are new tokens `--series-1..4` (light and dark) from a validated categorical order; orange/yellow fail the colour-blind check for four lines, so pressure is also dashed.
+- Gas text still says relative mV, not ammonia ppm, in every view.
+- **Deployed** as Worker version `3af342f6-0121-4106-a93d-63fbe3ab9a96` (only `index.html`, `app.js`, `trends.js`, `style.css` changed; see DEPLOYMENT.md). Not committed to Git.
+- **Open:** the agent did not sign in to the live dashboard, so the new views have only been seen with synthetic data. Real Safari/Firefox and a real phone not checked.
+
+## Coop Case V7T: triangular tube, ESP32 only (18 November 2026, 2D layout + Blender prototype, awaiting approval)
+
+The user asked for an alternate V7 with the shape of a triangular tube instead of a tetrahedron. Requests:
+- Eliminate the unused space.
+- Add a hook at the top back for wall hanging.
+- Same protocols as before.
+- ESP32 (V7a) contents only; no Pi version.
+
+Later the user asked for the sheet image and the Blender file, with no renders yet. **The layout is not approved yet:** treat the 3D as a prototype until the user approves `v7t_2d_layout.png`.
+
+- **Shape:** upright equilateral prism, 122 mm side, flat closed back on the wall, 116 x 98 x 178 mm (204 mm with the tab).
+- **Parts:**
+  - **Body:** back plate + floor + back wings + hanging tab, one part, printed back-down. The tab is 40 x 26 x 5 with a keyhole for one 4 mm wall screw.
+  - **Press-on lid:** 8 mm skirts over the door tops, 3 friction pins into the wing and pillar tops, a notch round the tab.
+  - **Front pillar:** separate part, M3 screw from under the floor.
+- **Doors:** no tools, no latch.
+  - Bottom edge sits in a floor groove (lip and ridge); top edge sits behind the lid skirt.
+  - The vertical edges lap about 5 mm over steps on the pillar and the back wings.
+  - To open: lid off, tilt the door top out about 20°, lift it out. Either door comes off on its own.
+  - **Changed from the first proposal:** the first top-skirt / lift-and-swing version could not release, because the low pods hit the floor before the door top cleared the skirt.
+- **Door S:**
+  - Pods as V7, stacked at the back end: AHT20 low, MQ-135 above it (window under the can, pins + Dupont out of the +u end). V7 pod lids and cartridges fit unchanged.
+  - SD seat 24 x 42 beside the pods.
+  - Breadboard above, ESP32 at its top with the USB plug going up.
+- **Door M:**
+  - V7 modem bay 110 x 80 x 18 with the USB plug space below it.
+  - Front-corner side: a fixed 3 mm lip holds the modem edge. A second strap there would hit the SD seat.
+  - Other side: one 20 mm strap through two loops.
+  - High knock-out vent.
+- **Back:** spare strip with M3 bosses, made only from leftover space; three cable loops for the ESP32 lead.
+- **Floor ports:** P1 ESP32 lead, P2 modem lead, P3 blank or vent plug.
+- **Size:** the MQ-135 pod and its pins on door S against the modem bay on door M set the side; 121 mm fails the fit check. A measured modem may allow a smaller case.
+- **Rule for door contents:** anything deeper than skin + gap must stay `door_free_u()` clear of the corner steps, or it hits them as the door tilts out. The fit check enforces this.
+- **Files:**
+  - Geometry and fit check: `work/coop_case_v7t_geometry.py`.
+  - Sheet: `work/draw_case_v7t_tube_20261118.py`.
+  - 3D build: `work/build_coop_case_v7t.py` (Blender 5.2, about 3 s, no renders, no STL).
+  - Outputs in `outputs/coop_case_v7t_tube/`: `v7t_2d_layout.png`, `layout_parameters.json`, `V7T_Tube.blend` (printable parts only), `validation_v7t.json`.
+- **Open:**
+  - User approval of the layout.
+  - The same measurements as V7: modem size and USB port position, breadboard, USB-C plug and bend.
+  - Corner coupon (pillar step + door lap + groove + lid skirt + lid pin) and a floor-port plug coupon.
+  - STL export and slicing after approval; renders when the user asks.
+
+## Coop Case V7: tetrahedron (16 November 2026, 2D layout + 3D prototype, awaiting approval)
+
+User asked for "coop case v7": a tetrahedron where each sloping side houses a component (modem, breadboard, third side still unknown), wiring through the middle, ventilation for the sensors on the breadboard side, a dust solution, economical printing, easy access, and a version a (ESP32) and b (Raspberry Pi; parts not owned, so public docs or backburner). The user was away; the 2D sheet and the 3D build were both made in a new folder (`outputs/coop_case_v7/`, nothing earlier replaced). **AGENTS.md asks for 2D approval before 3D: treat the 3D as a prototype until the user approves `v7_2d_layout.png`.**
+
+- **Design:** regular tetrahedron, 240 mm edge, 196 mm apex (200 with the hanging eye), base corners clipped 36 mm (footprint 198 x 172). The edge is set by the modem bay (110 x 80 x 18 = the user's 10 x 7 cm + 1 cm); a measured 100 x 70 x 15 modem would allow 218 mm.
+- **Parts:**
+  - Flat closed 2 mm base with floor ribs, three corner posts with cable ports, central spine (the "middle" wiring route), hub and bayonet post.
+  - Three interchangeable lift-off doors, each carrying its own housing: **S** breadboard + ESP32-C3 + SD seat + two sealed sensor pods (AHT20/BMP280 low, MQ-135 upper) behind louvred cartridges with filter pads; **M** modem bay with ledge, stops and two pairs of strap loops; **R** reserve (about 88 x 42 x 20, M3 boss grid).
+  - Tip cap: bayonet with a detent, locks clockwise, holds all doors, has a hanging eye.
+  - Door feet sit in closed holes over base pins.
+  - Small parts: pod lids (crush ribs), keyed flush vent cartridges carrying the filter pad, cable plug, two blank plugs, optional vent plug (low inlet).
+  - V7b doors **B-S** (pods + 7 x 5 cm perfboard/ADS1115) and **B-P** (Pi Zero 2 W on 58 x 23 M2.5 bosses) replace S and R.
+- **Dust:**
+  - Closed pods: their wire gaps must be closed with foam or tape. Downward louvres; washable 200-mesh or non-woven/ePTFE pad on each outside-removable cartridge.
+  - Tongue labyrinth on the upper side seams only (93-134 mm); the lower seams are plain 0.35 mm gaps, so tape them in a dusty coop.
+  - Plugs in every port. No silicone near the MQ-135 (datasheet warning).
+- **Heat:** the case is closed. Vent plugs (low) plus door M's knock-out (high) form an optional chimney. Untested.
+- **Evidence:** software geometry checks, reference slicing and an independent review whose findings were fixed (see VERIFICATION.md).
+  - V7a kit 259 g / 11 h 27 min at the V5a reference PETG profile (V5a Top USB was about 370 g).
+  - Base, cap, lids and cartridges need no support; each door needs under 1 g.
+  - Not printed, not fit-tested.
+- **Files:** `README.md`, `Printing setup.md`, `validation.json`, `model_parameters.json`, `slicing/`, `renders/`, `stl/`, `v7b_pi/`, `coupons/`, `V7_Tetrahedron.blend`. Generators: `work/coop_case_v7_geometry.py`, `work/build_coop_case_v7.py` (+ `_finish.py`), `work/draw_case_v7_tetra_20261116.py`, `work/slice_coop_case_v7.py`. Research notes for V7b and dust (public sources) are summarised in the README; the modem allowance follows the 11 November request.
+- **Open:**
+  - User approval of the layout.
+  - Measure the modem (size, USB end; the layout puts the plug at the bay's right end), breadboard, MQ-135 (right-angle pins assumed) and AHT20 boards.
+  - Choose the third side's use.
+  - Print the seven coupons; pick a filter pad.
+  - Watch the closed modem bay for heat.
+  - V7b sizes need checking against real parts.
+
+## 15 November home-test data deleted from the backend (user-requested)
+
+All 9 boots from 15 November (09:09–13:24 UTC, bench and troubleshooting), with their 204 reading blocks and 63 logs, and the one `SD_STATUS` command were deleted from production D1 after a private local backup (`outputs/cloud-cleanup/20261115_home_test_delete/`). The newest backend reading is now 10 November. The dashboard shows the 10 November firmware/state until the device next exchanges, so the SD Console commands are gated off until then. Details: VERIFICATION.md.
+
+## Wi-Fi not joining (15 November 2026, resolved: modem was down)
+
+**Resolved:** the user restarted the modem and the device reconnected on its own (no reboot), with HTTP 200 accepted exchanges and a drained queue. About 268 readings were dropped from RAM during the outage. They are on the SD card (`/coop/b00008.csv`) but not in the cloud, since backfill is not implemented. Those rows were later deleted at the user's request (see above). Open: modem reliability. The original notes follow.
+
+User reported that the USB-connected device was not reaching the internet. A read-only COM5 check (VERIFICATION.md) shows 1.2.0 running normally with sensors and SD fine, but it **never associates with Wi-Fi**: `wifi_status=6`, no IP, a continuous reconnect loop. DNS, TLS and the cloud are not involved yet. The status pattern rules out "SSID not found" and points to an authentication or association failure (AUTH_EXPIRE/weak link, wrong password, or the AP refusing the client). **Open:** confirm which network the saved SSID is and whether it is up and in range; get the exact disconnect reason (needs a diagnostic build or the reason added to `NET STATUS`, which requires flashing authorization). **User update:** the modem the device should join is not visible on the user's phone either. That is the likely root cause; check it when Wi-Fi testing resumes. The SD backup was checked in the same session: read/write and read-back verify OK, no failures or drops (VERIFICATION.md). Minor finding: the firmware's 30 s `WiFi.begin()` runs into the core's auto-reconnect (`sta is connecting, cannot set config`). This is harmless noise, not the cause.
 
 ## SD card commands in the dashboard Console (15 November 2026, deployed + firmware installed)
 
@@ -60,7 +175,7 @@ User reported on 6 November that the field device is not reconnecting on the das
 - **Data impact:** only 64 readings fit in RAM, so readings are being lost during the outage. Record the gap and do not fill it. The planned end of about 12 November may need extending, subject to the user's deadline.
 - **Proposed, not implemented:** timed self-reboot/watchdog, Wi-Fi transmit power cap (possible C3 SuperMini issue, recalled from memory and unverified) and a physical outage acceptance test.
 
-## Current handoff status - 5 November 2026
+## Earlier handoff status - 5 November 2026 (superseded by the entries above)
 
 The user reported on 5 November that the field launch went through; **actual start/end times and advancing persisted History rows are still not recorded here**. This refresh inspected local source and dated repository records only. Follow the [field launch handoff](docs/FIELD_RUN_2026-11-05.md); do not infer launch from the calendar date.
 
@@ -79,13 +194,13 @@ Low-cost poultry-coop environmental monitoring and preliminary early warning. **
 |---|---|
 | Hardware | ESP32-C3 SuperMini; MQ-135; replacement combined AHT20/BMP280; SSD1306 support deferred/disabled |
 | Wiring | MQ AO through a 10 kOhm/10 kOhm divider to GPIO3; shared I2C GPIO4 SDA/GPIO5 SCL; MQ heater 5 V, sensor/display 3V3, common ground |
-| Firmware | Arduino C++; `coop_monitor.ino` includes `dashboard_runtime.h` and `dashboard_protocol.h`; version `cloudflare-1.0.4` |
+| Firmware | Arduino C++; `coop_monitor.ino` includes `dashboard_runtime.h` and `dashboard_protocol.h`; version `cloudflare-1.2.0` (microSD backup from 1.1.0, remote SD commands from 1.2.0; OLED output disabled) |
 | Networking | Separate FreeRTOS task; Wi-Fi, NTP, verified TLS; device-initiated protocol-1 `POST /api/device/exchange` |
 | Backend | Cloudflare Worker `coop-monitor-worker`; D1 `coop-monitor-db` (`DB`); private R2 `coop-monitor-archives` (`ARCHIVES`) |
 | Dashboard | Signal; vanilla HTML/CSS/JavaScript; Overview, History, Console, Settings, Archives |
-| Local persistence | Calibration, provisioning, monitoring settings and command receipts in NVS; pending readings/logs in RAM |
+| Local persistence | Calibration, provisioning, monitoring settings and command receipts in NVS; pending readings/logs in RAM and a microSD backup (1.1.0+, flushed every 15 minutes, read back and verified) |
 | Maintenance | 30-day searchable-retention setting; cron every 15 minutes; older readings archived after verified R2 readback |
-| Alerts | Cron every 5 minutes; Discord bot message after 60 minutes of continuous `GAS_WARNING` (see 13 November entry) |
+| Alerts | Cron every 5 minutes; Discord bot message after 60 minutes of continuous `GAS_WARNING` (see 13 November entry); wait time, text, reminders and mentions set from Settings (18 November entry, `84bbab7f`) |
 | Updates | USB, existing 4 MB/no-OTA partition layout, erase-all disabled |
 
 See [stack architecture](docs/STACK_ARCHITECTURE.md), [project handoff](docs/PROJECT_HANDOFF.md) and [operations handoff](docs/OPERATIONS_HANDOFF.md).
@@ -95,14 +210,14 @@ See [stack architecture](docs/STACK_ARCHITECTURE.md), [project handoff](docs/PRO
 - **Source defaults:** readings every 2 seconds (configurable 2–60); normal HTTPS exchange about every 2 seconds independently; dashboard snapshots every 4 seconds; visible Overview trend updates at most once per minute; maintenance every 15 minutes.
 - **Historical stored device configuration, 13 October:** desired/applied revision 3, 30-second sampling, calibration fingerprint 2300842445, firmware `cloudflare-1.0.1`, uploads enabled. The device was offline, last exchange recorded at **13 October 08:16:23 Jakarta**. These values were not refreshed on 22 October.
 - **Historical Worker deployment, 13 October:** `d19d670b-57b4-4108-be5f-ed7ca5b35c32`, archive folders and ZIP downloads; migrations 0001–0004. That rollout's targeted archive/assets check did not recheck device state. See [deployment record](cloud/coop-monitor-worker/DEPLOYMENT.md).
-- **Local Git inspection, 5 November:** branch `main`, HEAD `b4e5d30` (`Sync dashboard, history, archive workflows and project handoff`). Pre-existing tracked changes and untracked source, handoffs, diagnostics and procurement files were preserved. Remote GitHub state was not queried; local `origin/main` is not live evidence.
+- **Local Git inspection, 5 November (historical; current state is at the top):** branch `main`, HEAD `b4e5d30` (`Sync dashboard, history, archive workflows and project handoff`). Pre-existing tracked changes and untracked source, handoffs, diagnostics and procurement files were preserved. Remote GitHub state was not queried; local `origin/main` is not live evidence.
 - **This refresh:** source/documentation consistency and local documentation checks only; no runtime tests, embedded compilation, account, production or device checks. The 82 Node / 50 isolated Worker passes belong to 22 October; the 95 Node passes belong to 1 November. See [verification](VERIFICATION.md).
 
 ## Invariants for future work
 
 - Preserve `coopcal` calibration format/namespace, other NVS formats, partitions, TLS verification, warning guards, immutable retry IDs/payloads, acknowledgement semantics and desired/applied configuration separation.
 - Ten-minute boot warm-up. Calibration is ten-minute stabilization plus five-minute collection, at least 60 valid samples. Automatic threshold: `max(baseline * 1.15, baseline + 3 * SD)`; manual: 10–2399 mV **at the divided ADC input**. Warm-up, calibration, missing/invalid calibration, invalid AHT readings and ADC-high guard suppress gas warnings. Confirmation defaults to three samples.
-- RAM holds 64 readings/16 logs; overflow can drop oldest entries and reboot loses pending data. No active SD logger or persistent flash measurement queue. At default sampling, 64 readings represent about 128 seconds before overflow, not guaranteed outage recovery.
+- RAM holds 64 readings/16 logs; overflow can drop oldest entries and reboot loses pending data. Firmware 1.1.0 and later also keep a microSD backup (`sd_backup.h`): a 4 KiB RAM buffer appended to a new `/coop/bNNNNN.csv` each boot, as whole 512-byte sectors every 15 minutes or at 3 KiB, each write read back and compared. A power cut loses at most about three minutes still in RAM. Nothing backfills the SD copy to the cloud. No persistent flash measurement queue. At default sampling, 64 readings represent about 128 seconds before overflow, not guaranteed outage recovery.
 - Commands are allowlisted with durable receipts and explicit uncertain recovery. No arbitrary shell, OTA, remote provisioning or remote calibration import. Cloud Console is bounded firmware events/results, not every USB/boot-ROM line.
 - Keep the exact workers.dev exchange endpoint available: firmware validates it and follows no redirects. A replacement dashboard domain alone does not migrate device traffic.
 - Upload pauses preserve local sensing/warnings but can leave dashboard state stale. Application capacity estimates are incomplete and are not an account-wide billing cap.
@@ -128,6 +243,7 @@ Manual archives move selected readings to verified private gzip files, retaining
    **11 November:** user has no modem to hand and asked for 1 cm of extra room, the port kept on the same side, and a still more compact case; 28 mm electronics height accepted as manageable. Replacement proposal, 2D only, not approved: `outputs/coop_case_v5d_compact_proposal/` (107 x 86 x 51 mm; bay 103 x 80 x 17 = full +10 mm width, +2 mm thickness, +3 mm length inside with the open left end taking a modem up to 110 mm; 2 mm walls; ESP32 USB moved to the left wall beside the modem port; leaf-spring retention). Generator: `work/draw_case_v5d_compact_20261111.py`. V5b/V5c sheets kept. Open before 3D: layout approval; measure the modem later to remove unused allowance.
    **11 November, later:** user approved that layout and named it **V6** (not V5b/V5d). It was relabelled and moved to `outputs/coop_case_v6/v6_box_*` (generator `work/draw_case_v6_box_20261111.py`; the `coop_case_v5d_compact_proposal` folder was removed as the same design under the old name). Before any 3D was built the user asked for a more creative, nose-shaped case. Concept sheet, 2D only, **not approved**: `outputs/coop_case_v6/v6_nose_*` (generator `work/draw_case_v6_nose_20261111.py`): 92 x 115.5 x 59 mm, about 461 cm3 by height-field estimate; modem upright in an 85 mm back slab with full +10 mm width and length, breadboard upright under the bridge, MQ-135 in the tip breathing through two underside nostrils, ESP32 in the left wing, all cables downward. Known trade-offs: 11-26 mm jumper room instead of 20, OLED would read sideways, MQ heater below the AHT20 (untested), curved shell needs surface CAD rather than the V5a box construction. (Superseded by the next entry.)
    **11 November, 3D build:** user chose the nose. Built in `outputs/coop_case_v6/`: `V6_Nose.blend`, print-oriented STLs (`back_slab`, `shelf`, `nose_shell`, `latch_key` x2, optional `bow_spring`), three fit coupons, renders, `README.md`, `Printing setup.md`, `validation.json`, `model_parameters.json`. Generator `work/build_coop_case_v6_nose.py` with surface in `work/coop_case_v6_geometry.py`. Changes from the 2D sheet, decided during the build and not separately approved: shell open at the top and closed by a brow plate on the shelf; OLED window is a 0.6 mm knock-out skin, not a hole; corner stops became two sideways latch keys (modem length inside 107 mm, i.e. +7 not +10); bow spring is a loose optional part; two 6.5 mm gussets in the top bay corners take the two 3 x 12 mm brow screws; softer bridge cross-section. Software geometry checks only, see [verification](VERIFICATION.md). Not sliced, not printed. Next: print the three coupons, then full parts; measure the modem.
+   **16 November, V7 tetrahedron:** new design in `outputs/coop_case_v7/` (see the 16 November entry at the top). 2D sheet and 3D prototype were made together while the user was away; approval of the 2D layout is still required before printing. V6 and earlier remain preserved.
 5. Proposal edits must use the selected current document, match its supplied format, preserve unrelated text and recheck the five-year literature cutoff. Drive/local copies are not assumed identical. Prior wording decisions remain in project history.
 
 ## Working boundaries and documentation ownership
@@ -209,4 +325,7 @@ User reported the field launch went through and asked for a Week 1 definition of
 User asked to test "temperature and humidity affect the MQ readings" with plots and heatmaps, then derive an early-warning threshold with a clustering algorithm. Same 127,678 eligible Week 1 rows / 2,128 five-minute medians, module `mq135-01`. **Humidity: supported.** Same-day r positive on 8/8 days (sign test p = 0.008); 30-minute changes r = +0.175 (circular-shift p < 0.001); 22 of 29 large humidity moves had MQ moving the same way (p = 0.008); MQ rose after 7 of 7 rapid humidity rises (mean +10.5 mV, p = 0.003), including the confirmed 23 October rain (747 to 798 mV in a minute). Within-day slope +0.64 mV per RH point (95% interval 0.37-0.89), about 21 mV over the usual daily swing. **Temperature: not shown** (pooled r = -0.04; daily r -0.71 to +0.69; 30-minute changes p = 0.36; not separable from humidity, r = -0.71 between them). Caveat: same-day correlation is mostly shared daily rhythm (same-day r 0.37 vs other-day 0.24, p = 0.23), so the conclusion rests on the short-term and event tests; sensor effect versus real gas release is still not separable. **Clustering, proposal only, not approved or applied:** k-means k = 2 on the whole week splits the start-up rise at 656 mV (silhouette 0.81); k-means k = 3 on the settled period (from 18 October 00:00) gives Normal < 729, Elevated 729-754, High >= 754 mV. Proposed early warning: five-minute median >= 754 mV held 30 minutes; watch at 729 mV. Upper boundary under checks: 747-757 leaving out one day, 743-762 resampling days, 754 after removing the humidity slope. The settled readings are one continuous hump (silhouette 0.53 at k = 3), so three states is a design choice and High covers 34% of 18-23 October; the top group of k = 5 (768 mV, 10%) nearly equals the 5 November 769 mV candidate, which stays frozen for the Week 2 test. The stored 695.5 mV threshold was exceeded 99% of the settled period. None of these millivolt values transfer to `mq135-02`; rerun `analyze.py` on that module's data. Open decision for the user: which candidate (754 mV three-state or 769 mV) to carry forward. No firmware, settings, device, cloud or Git action. matplotlib/scipy/scikit-learn were installed only into ignored `outputs/analysis-libs-20261110/`. Deliverable: ignored `outputs/week1-hypothesis-clustering-2026-11-10/` (`REPORT.md`, `report.html`, `results.json`, 11 figures, scripts).
 
 ### Week 1 notebook with literature limits, insight story and Gradio dashboard (13 November 2026, analysis only)
-User (writing in Indonesian) asked for all Week 1 plots in a notebook, 3D plots, temperature limits and sensor references with DOIs, a Gradio dashboard inside the notebook, and a markdown insight story that explains critical times from published limits instead of statistical lines. Deliverable: `Week 1 Readings/Plots/week1_analysis.ipynb` (Indonesian, executed outputs embedded). Literature limits used: broiler comfort zone 21-28 °C (Apalowo 2024, doi 10.3390/poultry3020010; number taken from search-result text, not read in full), THI bands comfort < 70 / alert 70-75 / danger 76-81 / emergency > 81 (Kim 2024, doi 10.3390/ani14071076, verified in full text; NRC 1971 formula, with 75 taken as the start of danger), NH3 < 25 ppm (Bist 2023, doi 10.1016/j.jenvman.2022.116919; from a secondary citation), and RH 40-60% (UGA extension, **no DOI**; no 2021-2026 DOI source for an RH range was found). Humidity effect on MOX sensors: Wang & Zhou 2022, doi 10.3390/ma15248728. BMP280 accuracy: Kusuma 2023, doi 10.14710/ik.ijms.28.2.189-202. Datasheets have no DOI. Every DOI was checked against Crossref. Findings: temperature > 28 °C every day about 10:00-17:30 (100% of days 12:00-15:00, peak 30-31 °C); THI >= 75 about 6-12 h/day, never emergency (max 79.0); RH > 60% most nights 19:00-07:00; in the settled period, median MQ is lowest midday (730-736 mV) and highest 21:00-02:00 (up to 758 mV); THI-MQ r ≈ -0.03, so heat risk and gas-response risk fall in separate windows. The notebook states that the 729/754/695.5 mV lines are not literature limits and that the 25 ppm limit needs a calibrated MQ. **Gradio cell not executed or tested** (gradio is not installed here; the user must `pip install gradio`); its plotting functions were executed. No firmware, device, cloud or Git action.
+User (writing in Indonesian) asked for all Week 1 plots in a notebook, 3D plots, temperature limits and sensor references with DOIs, a Gradio dashboard inside the notebook, and a markdown insight story that explains critical times from published limits instead of statistical lines. Deliverable: `Week 1 Readings/Plots/week1_analysis.ipynb` (Indonesian, executed outputs embedded). Literature limits used: broiler comfort zone 21-28 °C (Apalowo 2024, doi 10.3390/poultry3020010; number taken from search-result text, not read in full), THI bands comfort < 70 / alert 70-75 / danger 76-81 / emergency > 81 (Kim 2024, doi 10.3390/ani14071076, verified in full text; NRC 1971 formula, with 75 taken as the start of danger), NH3 < 25 ppm (Bist 2023, doi 10.1016/j.jenvman.2022.116919; from a secondary citation), and RH 40-60% (UGA extension, **no DOI**; no 2021-2026 DOI source for an RH range was found). Humidity effect on MOX sensors: Wang & Zhou 2022, doi 10.3390/ma15248728. BMP280 accuracy: Kusuma 2023, doi 10.14710/ik.ijms.28.2.189-202. Datasheets have no DOI. Every DOI was checked against Crossref. Findings: temperature > 28 °C every day about 10:00-17:30 (100% of days 12:00-15:00, peak 30-31 °C); THI >= 75 about 6-12 h/day, never emergency (max 79.0); RH > 60% most nights 19:00-07:00; in the settled period, median MQ is lowest midday (730-736 mV) and highest 21:00-02:00 (up to 758 mV); THI-MQ r ≈ -0.03, so heat risk and gas-response risk fall in separate windows. The notebook states that the 729/754/695.5 mV lines are not literature limits and that the 25 ppm limit needs a calibrated MQ. **Gradio cell not executed or tested** (gradio is not installed here; the user must `pip install gradio`); its plotting functions were executed. No firmware, device, cloud or Git action. 17 November: notebook explanations expanded (hourly-table reading guide, 5-minute transition grids, THI ≥ 75 crossing table); the builder now lives at `Week 1 Readings/Plots/build_nb.py` (edit it, not the .ipynb), and the artifact sources are in ignored `outputs/week1-artifact-sources-2026-11-11/`. Details and open items: [SESSION_HANDOFF_2026-11-17.md](docs/SESSION_HANDOFF_2026-11-17.md).
+
+### Week 2 field odour verification sheet (17 November 2026, prepared, not yet used)
+The notebook was accepted. The professor's next request: verify on site at 07:00-09:00 (where Fig. 4.1 shows temperature up / RH down) whether "high odour" coincides, as ground truth toward the user's end goal of a **multi-sensor threshold** (not MQ alone). Week 1 check (analysis only): at 07:00-09:00 temperature-RH r is -0.76 to -0.93 every day, settled MQ has a small morning hump (06-08 h median 749-752 mV vs 733-737 at 04-05 h), but RH-MQ r flips sign between days (-0.89 to +0.69), so sensors alone do not explain the morning MQ. Created a private Sheets artifact, "Survei Lapangan Kandang" (https://claude.ai/artifact/6Tf9MhkYhCtVYNd3F3kMDT): tab Observasi (one row per rating; slots 08:00-09:00 every 10 min (user narrowed the window and asked for denser slots; comparison slots dropped), prefilled for 18 November with the date stored as text 18/11/2026; two raters on the VDI 3882 0-6 intensity scale, "high" = mean >= 4 as a proposal; dashboard-seen flag for blinding; ventilation, bird activity, feeding, litter, droppings, water/cleaning, weather, wind, optional NH3 reference ppm, photo file; grey sensor columns to fill later from device 5-minute medians, THI computed), Info Kunjungan (per visit: device on, dashboard Connected, device-vs-phone clock offset, bird count/age, feeding, last cleaning), Panduan (scale, steps, MQ-135-is-not-ppm note). Proposed analysis once labels exist: logistic regression or a small decision tree on MQ (relative to `mq135-02` baseline), RH, temperature/THI, pressure, 30-minute RH change and hour, leave-one-day-out validation, AUC versus MQ-only. Open: confirm the device is installed and uploading in the coop during observations (last backend coop reading was 10 November); Week 1 mV thresholds do not transfer to `mq135-02`.

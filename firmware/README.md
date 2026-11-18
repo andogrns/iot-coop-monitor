@@ -1,6 +1,6 @@
 # Poultry-coop firmware
 
-Source/documentation reviewed **5 November 2026 (Asia/Jakarta)**. The active monitor is [coop_monitor/coop_monitor.ino](coop_monitor/coop_monitor.ino), built for the **ESP32-C3 SuperMini** with:
+Source/documentation reviewed **18 November 2026 (Asia/Jakarta)**. The active monitor is [coop_monitor/coop_monitor.ino](coop_monitor/coop_monitor.ino), built for the **ESP32-C3 SuperMini** with:
 
 - MQ-135 module and two 10 kOhm analog divider resistors;
 - combined AHT20/BMP280 temperature, humidity and pressure board;
@@ -8,11 +8,11 @@ Source/documentation reviewed **5 November 2026 (Asia/Jakarta)**. The active mon
 - stable USB power and readable USB Serial diagnostics;
 - 2.4 GHz Wi-Fi and the deployed Cloudflare Worker, D1 and private R2 archive backend.
 
-MicroSD is unused in the active build. GPIO3 reads the divided MQ analog signal; GPIO4/GPIO5 share I2C between the combined sensor board and OLED. See the [current wiring diagram](coop_monitor/WIRING.md) and [build/provisioning guide](coop_monitor/README.md).
+The microSD backup (firmware 1.1.0 and later) is part of the active build; see the [firmware guide](coop_monitor/README.md). GPIO3 reads the divided MQ analog signal; GPIO4/GPIO5 share I2C between the combined sensor board and OLED. See the [current wiring diagram](coop_monitor/WIRING.md) and [build/provisioning guide](coop_monitor/README.md).
 
-Measurements are buffered in RAM and may be lost during long outages or reboot. Calibration, Wi-Fi/device credentials, monitoring settings and command receipts persist in NVS. The default reading interval is two seconds; remote settings and commands are supported. There is no OTA, battery monitor, RTC, buzzer or relay output.
+Measurements are buffered in RAM and may be lost during long outages or reboot. The microSD backup (1.1.0 and later) keeps the record; on power loss, at most about three minutes still in RAM are at risk. Calibration, Wi-Fi/device credentials, monitoring settings and command receipts persist in NVS. The default reading interval is two seconds; remote settings and commands are supported. There is no OTA, battery monitor, RTC, buzzer or relay output.
 
-Current source and last recorded installed build are `cloudflare-1.0.4` (3 November upload, ESP32 core 3.3.12). Local checked AHT20/BMP280 readers run at 100 kHz with OLED disabled. Replacement sensor and closed-lid acquisition checks passed on 4 November; mq135-02 calibration and actual field uploads remain unverified. See [verification](../VERIFICATION.md) and the [field launch handoff](../docs/FIELD_RUN_2026-11-05.md). No device was accessed for this documentation refresh.
+Current source is `cloudflare-1.2.0` (committed 15 November; ESP32 core 3.3.12). The last recorded installed build is also 1.2.0: a USB upload on 15 November after a full flash backup, checked over Serial. It has not been re-read since. Earlier sensor work ran on 1.0.4 (3–4 November) with the local AHT20/BMP280 readers at 100 kHz and OLED disabled. Replacement sensor and closed-lid acquisition checks passed on 4 November; mq135-02 calibration and actual field uploads remain unverified. See [verification](../VERIFICATION.md). No device was accessed for this documentation refresh.
 
 ## Historical source
 

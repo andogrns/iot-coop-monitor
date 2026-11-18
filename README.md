@@ -1,12 +1,12 @@
 # IoT Coop Monitor
 
-ESP32-C3 poultry-coop environmental monitoring and preliminary early warning using MQ-135, a combined AHT20/BMP280 module and an SSD1306 OLED. **MQ-135 measures relative gas response, not calibrated ammonia ppm.**
+ESP32-C3 poultry-coop environmental monitoring and preliminary early warning using MQ-135 and a combined AHT20/BMP280 module. An SSD1306 OLED is supported in source but disabled and currently disconnected. **MQ-135 measures relative gas response, not calibrated ammonia ppm.**
 
-Documentation refreshed **5 November 2026 (Asia/Jakarta)** against local source. Active stack: Arduino C++ firmware `cloudflare-1.0.4` → Wi-Fi/verified HTTPS protocol 1 → Cloudflare Worker → D1 recent history/private R2 archives → the Signal owner dashboard.
+Documentation refreshed **18 November 2026 (Asia/Jakarta)** against local source, local Git state and a public read-only check of the live Worker. Active stack: Arduino C++ firmware `cloudflare-1.2.0` → Wi-Fi/verified HTTPS protocol 1 → Cloudflare Worker → D1 recent history/private R2 archives → the Signal owner dashboard (Overview with trend views, History, Console, Settings with gas-warning alerts, Archives).
 
 Default sampling is every 2 seconds (configurable 2–60); device exchange normally runs about every 2 seconds independently; dashboard snapshots refresh every 4 seconds. Searchable retention is configured to 30 days, with archive maintenance every 15 minutes. These are source settings, not today's device/cloud readback.
 
-Firmware retains USB diagnostics, calibration and warning guards. OLED output is currently disabled and the display was intentionally disconnected in the last recorded bench test. Pending measurements/logs use bounded RAM and can be lost on overflow or reboot. Calibration, provisioning, settings and command receipts persist in NVS. Routine monitoring needs power and internet; it does not require an open Serial Monitor or computer logger.
+Firmware retains USB diagnostics, calibration and warning guards. OLED output is currently disabled and the display was intentionally disconnected in the last recorded bench test. Pending measurements/logs use bounded RAM and can be lost on overflow or reboot. Firmware 1.1.0 and later also write them to a microSD backup (flushed about every 15 minutes, read back and verified). Nothing backfills that SD copy to the cloud yet. Calibration, provisioning, settings and command receipts persist in NVS. Routine monitoring needs power and internet; it does not require an open Serial Monitor or computer logger.
 
 ## Documentation and handoff
 
@@ -28,8 +28,8 @@ Configured dashboard: [Coop Monitor](https://coop-monitor-worker.coop-monitor-wo
 
 ## Verification boundary
 
-Latest recorded evidence: 1 November multipart-CSV Worker rollout; 3 November firmware 1.0.4 upload; 4 November replacement-sensor and closed-lid tests, each 180 consecutive readings with zero retries/final failures. The last applied interval was five seconds, revision 4; replacement MQ calibration remains missing. The planned 5 November field launch and fresh persisted uploads remain unverified. This documentation-only refresh performed no runtime, production or device checks; historical test results and remaining acceptance are in [verification](VERIFICATION.md) and the [project handoff](docs/PROJECT_HANDOFF.md).
+Latest recorded evidence: 18 November Worker rollouts (`3af342f6`, then `84bbab7f`) with public health and asset-hash checks; 15 November firmware 1.2.0 installed and checked over Serial; 4 November replacement-sensor and closed-lid tests, each 180 consecutive readings with zero retries/final failures (last applied interval five seconds, revision 4; replacement MQ calibration still missing). The planned 5 November field run has no recorded start, end or verified History rows, and the newest coop reading in the backend is from 10 November. This refresh did not sign in, read credentials or touch the device. Historical results and remaining acceptance are in [verification](VERIFICATION.md) and the [project handoff](docs/PROJECT_HANDOFF.md).
 
 ## Historical implementations
 
-The recorded `codex/quicktest` and `codex/wifi-cloud` workflows used offline field sessions/manual Google Sheets upload and continuous Apps Script uploading respectively. Commit `09aff6a` preserves the original MicroSD monitor. Historical data/source remain separate from the active Cloudflare runtime. SHT31, SD logging and those Apps Script workflows are not current integrated-monitor requirements.
+The recorded `codex/quicktest` and `codex/wifi-cloud` workflows used offline field sessions/manual Google Sheets upload and continuous Apps Script uploading respectively. Commit `09aff6a` preserves the original MicroSD monitor. Historical data/source remain separate from the active Cloudflare runtime. SHT31 and the Apps Script workflows are not current integrated-monitor requirements. The microSD backup (firmware 1.1.0 and later) is active code; see the [firmware guide](firmware/coop_monitor/README.md).

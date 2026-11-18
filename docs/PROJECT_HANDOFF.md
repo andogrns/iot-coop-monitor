@@ -1,27 +1,27 @@
 # Coop Monitor project handoff
 
-Prepared **5 November 2026 (Asia/Jakarta)** for the next developer or coding agent. Start with [project context](../PROJECT_CONTEXT.md), [shared rules](../AGENTS.md) and [stack architecture](STACK_ARCHITECTURE.md). The companion [operations handoff](OPERATIONS_HANDOFF.md) covers operator transfer and incident handling.
+Refreshed **18 November 2026 (Asia/Jakarta)** for the next developer or coding agent. Start with [project context](../PROJECT_CONTEXT.md), [shared rules](../AGENTS.md) and [stack architecture](STACK_ARCHITECTURE.md). The companion [operations handoff](OPERATIONS_HANDOFF.md) covers operator transfer and incident handling.
 
 ## Baseline and evidence
 
 | Item | Handoff baseline |
 |---|---|
-| Local source | Branch `main`, HEAD `b4e5d30`; inspected 5 November before this documentation refresh |
-| Working tree | Pre-existing tracked firmware/dashboard/documentation edits and untracked source, handoffs, diagnostics and procurement scripts preserved; documentation edits from this refresh remain uncommitted |
-| Remote Git | Not queried during this refresh; no new commit/push or branch switch |
-| Firmware source | `cloudflare-1.0.4`, protocol 1, ESP32-C3 SuperMini, USB-only updates |
-| Configured backend | Worker `coop-monitor-worker`, D1 `coop-monitor-db`, private R2 `coop-monitor-archives`; retention 30 days, cron 15 minutes |
-| Last recorded rollout | 1 November, Worker `ae9536c7-60fa-475e-8fe5-e07da01ecdb1` (multipart CSV); migrations 0001–0004; [dated record](../cloud/coop-monitor-worker/DEPLOYMENT.md) |
+| Local source | Branch `main`: the 18 November Worker commit and this documentation commit, not pushed (`git log` has hashes). `origin/main` was `221dd07` (15 Nov) at the last fetch |
+| Working tree | Still uncommitted: Week 1 notebook (`Week 1 Readings/Plots/week1_analysis.ipynb`), its builder `build_nb.py` and `docs/SESSION_HANDOFF_2026-11-17.md` |
+| Remote Git | `git fetch` on 18 November: `origin/main` = `221dd07`, unchanged; nothing pushed |
+| Firmware source | `cloudflare-1.2.0` (commit `14027c0`, 15 Nov), protocol 1, ESP32-C3 SuperMini, USB-only updates |
+| Configured backend | Worker `coop-monitor-worker`, D1 `coop-monitor-db`, private R2 `coop-monitor-archives`; retention 30 days; crons every 15 minutes (maintenance) and every 5 minutes (gas alerts) |
+| Last recorded rollout | 18 November, Worker `84bbab7f-8749-4e3e-9472-c33f847a48e4` (gas-warning alert settings; Overview trend views in `3af342f6` the same day); migrations 0001–0004, none added since; [dated record](../cloud/coop-monitor-worker/DEPLOYMENT.md) |
 | Last recorded physical checks | 4 November: replacement AHT/BMP and closed-lid tests, each 180 consecutive readings / 15 minutes with zero retries/final failures; OLED disconnected, Wi-Fi intentionally off |
-| Last recorded device state | 4 November: revision 4, five-second sampling, mq135-02 calibration missing; 100 kHz bus, OLED disabled |
-| Local checks | This refresh: documentation consistency only. Historical runtime results: 95 Node tests on 1 November; 50 isolated Worker checks on 22 October; see [verification](../VERIFICATION.md) |
+| Last recorded device state | 15 November: `cloudflare-1.2.0` installed by USB and checked over Serial. Last full settings readback 4 November: revision 4, five-second sampling, mq135-02 calibration missing; 100 kHz bus, OLED disabled. Backend holds no coop readings after 10 November |
+| Local checks | 18 November: 139/139 backend Node tests with the bundled Node 24.22.1; firmware compilation not run in this refresh. Older results: see [verification](../VERIFICATION.md) |
 
-Today's production version, installed firmware, connectivity, provider usage and physical condition were not inspected. Recorded state is dated evidence, not proof of present device operation. No credentials, connected accounts or private captures were read to produce this handoff.
+On 18 November the public `/health` endpoint and five dashboard asset hashes were checked. Installed firmware, device connectivity, provider usage and physical condition were not inspected. Recorded state is dated evidence, not proof of present device operation. No credentials, connected accounts or private captures were read to produce this handoff.
 
 ## First development session
 
 1. Read the context/rules, inspect actual Git status and relevant source, and preserve unrelated work. If Git reports dubious ownership, use the command-scoped exception below.
-2. Identify the layer being changed. Use the source map below and keep active Cloudflare code separate from historical SD/Apps Script/QuickTest support.
+2. Identify the layer being changed. Use the source map below and keep active Cloudflare code separate from historical Apps Script/QuickTest support; the microSD backup is active firmware code since 1.1.0.
 3. Record the proposed behavior and compatibility impact before changing ingestion identity, acknowledgements, pause/timing, command lifecycle, calibration/NVS, retention or partitions.
 4. Implement within the current authorization and run appropriate local checks. Production deployment, cloud writes, device actions and Git publication require authorization covering those actions.
 5. Update context/architecture/contracts when behavior changes, and add dated results with their evidence layer. Do not call a local test a physical or production pass.

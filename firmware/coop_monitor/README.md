@@ -8,7 +8,7 @@ USB `I2C RATE <10000|50000|100000>` temporarily changes the bus clock for contro
 
 **Standalone week-long field run:** use the [5 November launch handoff](../../docs/FIELD_RUN_2026-11-05.md). `preflight_field_run.ps1 -Port COM5` performs a bounded 15-minute read-only sensor/upload check and writes `result.json` under ignored outputs. Add `-ReconnectOnce` to request one reconnect using existing settings. It requires fresh accepted protocol exchanges and a draining queue; HTTP 200 alone is insufficient. Actual new dashboard History rows remain a separate mandatory launch check. The tool neither calibrates nor flashes. Offline buffering remains only 64 readings; no week-long computer capture or new persistent device logger is installed by this helper.
 
-Source/documentation reviewed **5 November 2026 (Asia/Jakarta)**. Current source is `cloudflare-1.0.4`; OLED traffic is disabled. USB backpressure handling, protocol 1 and verified TLS remain. See [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md).
+Source/documentation reviewed **18 November 2026 (Asia/Jakarta)**. Current source is `cloudflare-1.2.0`; OLED traffic is disabled. USB backpressure handling, protocol 1 and verified TLS remain. See [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md).
 
 The **10 October** physical upload installed `cloudflare-1.0.1` on the ESP32-C3 SuperMini. A verified full 4 MB flash backup and calibration export preceded the erase-all-off upload. Calibration and existing Wi-Fi/device settings were retained; actual sensor readings and applied revision 1 were read back then. Sampling/uploads continued with Serial Monitor closed during that short check. This is historical evidence, not today's device status. The later 13 October stored snapshot recorded revision 3 and 30-second sampling; it was not refreshed here. See [verification](../../VERIFICATION.md) and [project context](../../PROJECT_CONTEXT.md).
 
@@ -18,7 +18,7 @@ MQ-135 values are relative gas response, not validated ammonia ppm. Default sens
 
 ## Hardware
 
-Use the ESP32-C3 SuperMini, MQ-135 module, two 10 kOhm divider resistors, AHT20/BMP280 combined module and SSD1306 128x64 I2C OLED. See the [pin table and wiring diagram](WIRING.md).
+Use the ESP32-C3 SuperMini, MQ-135 module, two 10 kOhm divider resistors, AHT20/BMP280 combined module and SSD1306 128x64 I2C OLED (disconnected; output disabled in firmware). See the [pin table and wiring diagram](WIRING.md).
 
 - MQ heater: stable 5 V / VBUS; all grounds shared.
 - MQ AO: 10 kOhm to GPIO3; another 10 kOhm from GPIO3 to GND. Never connect a possible 5 V AO directly to the ESP32.

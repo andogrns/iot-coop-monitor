@@ -1,10 +1,10 @@
 # ESP32 firmware connection handoff
 
-Source/contract reviewed **5 November 2026 (Asia/Jakarta)**. For whole-project continuity use the [project handoff](../../docs/PROJECT_HANDOFF.md), [stack architecture](../../docs/STACK_ARCHITECTURE.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md). This file owns the device wire contract; no physical/cloud readback was performed during this review.
+Source/contract reviewed **18 November 2026 (Asia/Jakarta)**. For whole-project continuity use the [project handoff](../../docs/PROJECT_HANDOFF.md), [stack architecture](../../docs/STACK_ARCHITECTURE.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md). This file owns the device wire contract; no physical/cloud readback was performed during this review.
 
 ## Provisioned connection
 
-Configured device is `coop-monitor-01`; source firmware is `cloudflare-1.0.4` (sensor-focused build with OLED disabled). The ignored `../../firmware/coop_monitor/dashboard.local.json` is the device ID/endpoint/token provisioning input consumed by `configure_network.ps1` for the active protocol-v1 firmware. It was not read for this review. Compilation, erase-all-off upload, retained calibration/settings and real HTTPS ingestion were verified on **10 October**. That is not current connectivity evidence. See the [firmware guide](../../firmware/coop_monitor/README.md) and [dated state](../../PROJECT_CONTEXT.md).
+Configured device is `coop-monitor-01`; source firmware is `cloudflare-1.2.0` (microSD backup and remote SD commands; OLED output disabled). The last recorded install of 1.2.0 was a USB upload on 15 November. The backend holds no coop readings after 10 November (the 15 November bench boots were deleted at the user's request), so the device's current firmware and uploads are unverified. The ignored `../../firmware/coop_monitor/dashboard.local.json` is the device ID/endpoint/token provisioning input consumed by `configure_network.ps1` for the active protocol-v1 firmware. It was not read for this review. Compilation, erase-all-off upload, retained calibration/settings and real HTTPS ingestion were verified on **10 October**. That is not current connectivity evidence. See the [firmware guide](../../firmware/coop_monitor/README.md) and [dated state](../../PROJECT_CONTEXT.md).
 
 Endpoint: `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange`
 
@@ -29,7 +29,7 @@ Example (substitute real measurements):
   "bootId": "random-boot-id",
   "state": {
     "uptimeMs": 12000,
-    "firmwareVersion": "cloudflare-1.0.1",
+    "firmwareVersion": "cloudflare-1.2.0",
     "appliedConfigRevision": 1,
     "configStatus": "applied",
     "configError": "",
