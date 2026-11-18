@@ -8,6 +8,7 @@ Source reviewed **18 November 2026 (Asia/Jakarta)** on branch `main`, after the 
 flowchart TD
   MQ[MQ-135 via divider / GPIO3] --> LOOP[Arduino sensing, calibration and warning loop]
   ENV[AHT20 and BMP280 / I2C GPIO4 and GPIO5] --> LOOP
+  LOOP --> OLED[Optional USB output / OLED disabled]
   LOOP --> RAM[Bounded reading and log RAM buffers]
   NVS[NVS calibration, provisioning, settings and command receipts] <--> LOOP
   RAM --> SD[microSD backup, flushed every 15 min, read back and verified]
@@ -30,8 +31,9 @@ The ESP initiates exchanges; the Worker does not open a connection to the device
 | ESP32-C3 SuperMini | Single-core device running Arduino C++ and a separate FreeRTOS network task | [sketch](../firmware/coop_monitor/coop_monitor.ino), [runtime](../firmware/coop_monitor/dashboard_runtime.h) |
 | MQ-135 | Relative gas response; 5 V heater/module, two 10 kOhm divider resistors, AO to GPIO3, DO unused | [wiring](../firmware/coop_monitor/WIRING.md) |
 | AHT20/BMP280 | Temperature/humidity and temperature/pressure respectively; 3V3, shared I2C GPIO4 SDA/GPIO5 SCL | [sketch](../firmware/coop_monitor/coop_monitor.ino) |
+| SSD1306 | 128x64 I2C OLED on the same bus; support retained but output disabled; intentionally disconnected in last recorded test | [sketch](../firmware/coop_monitor/coop_monitor.ino) |
 | Firmware | `cloudflare-1.2.0`, protocol 1; microSD backup from 1.1.0, remote SD commands from 1.2.0; Arduino ESP32 core 3.3.12 in the recorded build | [protocol types](../firmware/coop_monitor/dashboard_protocol.h), [build guide](../firmware/coop_monitor/README.md) |
-| Firmware libraries | Local checked AHT20/BMP280 readers; core supplies Wire, Preferences, Wi-Fi, HTTP/TLS and cJSON | [firmware guide](../firmware/coop_monitor/README.md) |
+| Firmware libraries | Local checked AHT20/BMP280 readers; Adafruit SSD1306, GFX and BusIO; core supplies Wire, Preferences, Wi-Fi, HTTP/TLS and cJSON | [firmware guide](../firmware/coop_monitor/README.md) |
 | Worker | `src/index.ts` re-exports JavaScript `app.js`; routing, validation, auth, storage and archives | [entry](../cloud/coop-monitor-worker/src/index.ts), [routes](../cloud/coop-monitor-worker/src/app.js) |
 | D1 / R2 | SQLite-based recent storage and private gzip object storage, through Worker bindings | [config](../cloud/coop-monitor-worker/wrangler.jsonc) |
 | Frontend | Signal, vanilla HTML/CSS/JavaScript and Canvas trends; same-origin Worker assets | [HTML](../cloud/coop-monitor-worker/public/index.html), [app](../cloud/coop-monitor-worker/public/app.js), [trends](../cloud/coop-monitor-worker/public/trends.js) |
@@ -41,7 +43,7 @@ The microSD backup is active code from firmware 1.1.0 (see the persistence table
 
 ## Sensing and timing
 
-The active bus runs at 100 kHz. AHT20 reads wait for conversion, validate seven-byte CRC and retry a complete conversion within bounded limits. BMP280 validates identity, repeated factory trim and full transfers before compensation. Recovery counters distinguish retries from final failures. Replacement-module and closed-lid acquisition passed short tests on 4 November; original-module fault cause, accuracy and field endurance remain unproved.
+The active bus runs at 100 kHz with OLED disabled. AHT20 reads wait for conversion, validate seven-byte CRC and retry a complete conversion within bounded limits. BMP280 validates identity, repeated factory trim and full transfers before compensation. Recovery counters distinguish retries from final failures. Replacement-module and closed-lid acquisition passed short tests on 4 November; original-module fault cause, accuracy and field endurance remain unproved.
 
 
 MQ readings include raw ADC, divided-input millivolts, response/baseline ratio, active threshold and status. Environmental fields are `ahtTemperatureC`, `humidityPct`, `bmpTemperatureC` and `pressureHpa`. Missing values are null on the wire, not zero. **These measurements do not establish ammonia concentration or selectivity.**

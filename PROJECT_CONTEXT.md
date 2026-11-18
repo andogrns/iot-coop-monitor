@@ -8,7 +8,6 @@ Updated **18 November 2026 (Asia/Jakarta)** from local source, Git state, a publ
 - **Device evidence gap:** the backend's newest coop reading is 10 Nov (the 15 Nov bench boots were deleted at the user's request). Whether the device runs 1.2.0 and uploads now is unverified.
 - **Worker:** live `84bbab7f` (18 Nov): Settings gas-warning alerts, plus the Overview side-by-side and all-in-one views (`3af342f6`, same day). Public check: `/health` ok; the checked live assets match the local files.
 - **Git:** local `main` holds the 18 Nov Worker commit and the docs-refresh commit, not pushed. `origin/main` was `221dd07` (15 Nov) at the last fetch. The Week 1 notebook, `build_nb.py` and the 17 Nov handoff are still uncommitted.
-- **Display:** the OLED was removed from the project on 18 November 2026 (user decision). Its firmware code, the `OLED TEST` command and the OLED sketch folders were deleted from the repo. Dated records below keep the earlier OLED notes as history.
 - **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded).
 
 ## Configurable gas-warning alerts (18 November 2026, deployed as `84bbab7f`)
@@ -193,7 +192,7 @@ Low-cost poultry-coop environmental monitoring and preliminary early warning. **
 
 | Layer | Source-confirmed setup |
 |---|---|
-| Hardware | ESP32-C3 SuperMini; MQ-135; replacement combined AHT20/BMP280. No display: the OLED was removed from the project on 18 November 2026 |
+| Hardware | ESP32-C3 SuperMini; MQ-135; replacement combined AHT20/BMP280; SSD1306 support deferred/disabled |
 | Wiring | MQ AO through a 10 kOhm/10 kOhm divider to GPIO3; shared I2C GPIO4 SDA/GPIO5 SCL; MQ heater 5 V, sensor/display 3V3, common ground |
 | Firmware | Arduino C++; `coop_monitor.ino` includes `dashboard_runtime.h` and `dashboard_protocol.h`; version `cloudflare-1.2.0` (microSD backup from 1.1.0, remote SD commands from 1.2.0; OLED output disabled) |
 | Networking | Separate FreeRTOS task; Wi-Fi, NTP, verified TLS; device-initiated protocol-1 `POST /api/device/exchange` |
@@ -235,7 +234,7 @@ Manual archives move selected readings to verified private gzip files, retaining
 
 ## Remaining decisions and acceptance
 
-1. Complete physical acceptance: independent power-cycle persistence; warning guards; changed settings and revision convergence; every supported command and interrupted/restart recovery; Wi-Fi loss, RAM overflow and owner pause; then extended field coverage with measured resource usage; the planned seven-day launch is the immediate priority. The 10 October upload/real-ingestion/Serial-closed observations are historical, short-duration evidence.
+1. Complete physical acceptance: independent power-cycle persistence; warning guards (OLED work deferred); changed settings and revision convergence; every supported command and interrupted/restart recovery; Wi-Fi loss, RAM overflow and owner pause; then extended field coverage with measured resource usage; the planned seven-day launch is the immediate priority. The 10 October upload/real-ingestion/Serial-closed observations are historical, short-duration evidence.
 2. Review deferred findings before changing behavior: cross-minute identity checks; command/log admission races; incomplete capacity/request accounting; automatic archive cutoff overlap; accepted/running command lifecycle and growing history; boot-clock drift recovery; distributed abuse protection and orphan reconciliation. [Audit evidence](docs/BACKEND_AUDIT_2026-10-12.md). No fix is implied by this refresh.
 3. Four-week data collection and seven-day searchable retention were discussed only. **Retention remains 30 days; the seven-day field run was subsequently planned for 5 November, but actual start/end remain unrecorded.**
 4. Enclosure fabrication uses the separate **V5a Top USB** variant in `outputs/coop_case_v5a_top_usb/`, nominal 170 x 110 x 69 mm; older V5/V5a remain preserved. Seven fit coupons precede full parts. CAD/slicing is not physical fit/thermal/durability acceptance. Future geometry needs a reviewed 2D layout first. Artifact presence/pricing were not refreshed here.

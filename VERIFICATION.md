@@ -1,13 +1,5 @@
 # Coop Monitor verification
 
-## OLED removed from the project: 18 November 2026 (source, compile and host tests)
-
-- **Decision (user, 18 November):** the OLED module is no longer used.
-- **Source removed:** the OLED driver and transport code, the `OLED TEST` command, the `OLED_ERROR` status flag and its labels, the OLED fields in the `@I2C,BUS` line, and the `OLED_ENABLED` switch. `oled_transport.h` and its host test, and four OLED sketch folders (`firmware/oled_i2c_test`, `firmware/oled_sensor_display`, `firmware/aht20_bmp280_oled_test`, `firmware/all_sensors_oled_mq135_test`), were deleted. I2C stays at 100 kHz, and `I2C RATE` is no longer blocked by an OLED setting.
-- **Checks (build and host only):** `build_wifi_cloud.ps1` compiled the firmware with no upload (program 1,334,277 bytes, 63%; globals 74,644 bytes, 22%). `test_aht20.ps1` passed (AHT20 and BMP280 tests). `test_reading_format.ps1` passed after its expected status-label count changed from 9 to 8, because `OLED_ERROR` no longer exists.
-- **Not done:** no flash, device command or deployment. The device's installed binary is still the 1.2.0 build from 15 November, which had the OLED disabled. The firmware version string stays `cloudflare-1.2.0`; a later upload can carry a new one.
-- **Kept on purpose:** the Worker keeps its `OLED_ERROR` label, so readings stored before the removal still display. Dated records elsewhere keep the earlier OLED notes as history. The Apps Script archive (`cloud/apps-script/Code.gs`) and the git-ignored `outputs/` enclosure sheets were not changed.
-
 ## Repository and documentation check: 18 November 2026 (local, public read-only)
 
 - **Git (read-only):** `git fetch origin --prune` ran. `ls-remote` showed `main` at `221dd07` (15 Nov), the same as local `main`; `codex/quicktest` and `codex/wifi-cloud` were unchanged. Firmware files had no working-tree change against HEAD; the latest firmware commit is `14027c0` (15 Nov).

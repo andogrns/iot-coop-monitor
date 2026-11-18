@@ -4,11 +4,11 @@
 
 The damaged MQ module was replaced with a new, initially unconditioned module, identified as `mq135-02`. Its calibration uses separate `mq02_*` keys; the old module's profile is preserved but cannot apply to the replacement. Initial conditioning and a new clean-air calibration are still required. USB `SENSOR STATUS` reports sensor errors/recovery counters and a fresh BMP chip-ID check; `MQ CHECK` takes a bounded 256-sample ADC/noise/clipping check without saving calibration. `I2C SCAN` remains available. `OLED TEST` reports disabled in this build. Earlier white/striped OLED output did not establish the DSP-0109 controller because prior SSD1306/SH1106 initialization was not separated by physical power removal; normal display operation remains unresolved.
 
-USB `I2C RATE <10000|50000|100000>` temporarily changes the bus clock for controlled sensor diagnostics. It changes RAM only; reboot restores the compiled default. A successful sample after retry does not establish an error-free electrical bus. Do not use a lower speed as a claimed fix without comparing actual sensor failure/recovery counters.
+USB `I2C RATE <10000|50000|100000>` temporarily changes the bus clock for controlled sensor diagnostics while OLED is disabled. It changes RAM only; reboot restores the compiled default. A successful sample after retry does not establish an error-free electrical bus. Do not use a lower speed as a claimed fix without comparing actual sensor failure/recovery counters.
 
 **Standalone week-long field run:** use the [5 November launch handoff](../../docs/FIELD_RUN_2026-11-05.md). `preflight_field_run.ps1 -Port COM5` performs a bounded 15-minute read-only sensor/upload check and writes `result.json` under ignored outputs. Add `-ReconnectOnce` to request one reconnect using existing settings. It requires fresh accepted protocol exchanges and a draining queue; HTTP 200 alone is insufficient. Actual new dashboard History rows remain a separate mandatory launch check. The tool neither calibrates nor flashes. Offline buffering remains only 64 readings; no week-long computer capture or new persistent device logger is installed by this helper.
 
-Source/documentation reviewed **18 November 2026 (Asia/Jakarta)**. Current source is `cloudflare-1.2.0`. USB backpressure handling, protocol 1 and verified TLS remain. See [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md).
+Source/documentation reviewed **18 November 2026 (Asia/Jakarta)**. Current source is `cloudflare-1.2.0`; OLED traffic is disabled. USB backpressure handling, protocol 1 and verified TLS remain. See [stack architecture](../../docs/STACK_ARCHITECTURE.md), [project handoff](../../docs/PROJECT_HANDOFF.md) and [operations handoff](../../docs/OPERATIONS_HANDOFF.md).
 
 The **10 October** physical upload installed `cloudflare-1.0.1` on the ESP32-C3 SuperMini. A verified full 4 MB flash backup and calibration export preceded the erase-all-off upload. Calibration and existing Wi-Fi/device settings were retained; actual sensor readings and applied revision 1 were read back then. Sampling/uploads continued with Serial Monitor closed during that short check. This is historical evidence, not today's device status. The later 13 October stored snapshot recorded revision 3 and 30-second sampling; it was not refreshed here. See [verification](../../VERIFICATION.md) and [project context](../../PROJECT_CONTEXT.md).
 
@@ -18,11 +18,11 @@ MQ-135 values are relative gas response, not validated ammonia ppm. Default sens
 
 ## Hardware
 
-Use the ESP32-C3 SuperMini, MQ-135 module, two 10 kOhm divider resistors, AHT20/BMP280 combined module. See the [pin table and wiring diagram](WIRING.md).
+Use the ESP32-C3 SuperMini, MQ-135 module, two 10 kOhm divider resistors, AHT20/BMP280 combined module and SSD1306 128x64 I2C OLED (disconnected; output disabled in firmware). See the [pin table and wiring diagram](WIRING.md).
 
 - MQ heater: stable 5 V / VBUS; all grounds shared.
 - MQ AO: 10 kOhm to GPIO3; another 10 kOhm from GPIO3 to GND. Never connect a possible 5 V AO directly to the ESP32.
-- I2C: GPIO4 SDA, GPIO5 SCL; combo module powered from 3V3.
+- I2C: GPIO4 SDA, GPIO5 SCL; combo module and OLED powered from 3V3.
 - MicroSD backup (`cloudflare-1.1.0`): CS GPIO10, SCK GPIO6, MOSI GPIO7, MISO GPIO1; adapter B (3V3, CS, MOSI, CLK, MISO, GND) powered from the C3 3V3, never 5 V, with 100 µF across its 3V3/GND. Use a FAT32 card of 32 GB or less. `sd_backup.h` buffers every reading and device log event in RAM (4 KiB), writes whole 512-byte sectors every 15 minutes or at 3 KiB (about every 3 minutes at 5 s), reads each write back, and starts `/coop/bNNNNN.csv` on each boot. A power cut loses at most the ~3 minutes still in RAM. USB: `SD STATUS`, `SD TAIL`, `SD FLUSH`, `SD EJECT` (before removing the card), `SD MOUNT`. The firmware runs normally without a card.
 - Diagnostics (`cloudflare-1.1.0`): one `BOOT reset=<reason>` log per boot (plus `cause=tls_memory` after a safety restart: if HTTPS cannot allocate TLS memory for 10 minutes, the firmware flushes the SD buffer and restarts), a `CRASH task=... pc=...` log after a firmware crash (core dump summary), and `state.health` with Wi-Fi signal, reconnects, upload failures, RAM queue depth, free memory (including `largestFreeBlock`, the limit for opening TLS), AHT/BMP counters and SD status. The RAM upload queue holds 64 readings (about 5 minutes at 5 s); the SD card is the record for longer outages.
 - Network robustness (`cloudflare-1.1.0`): Wi-Fi TX power is 8.5 dBm (the SuperMini antenna fails to authenticate or pass traffic at full power). DNS prefers 1.1.1.1/8.8.8.8 with the DHCP server as fallback. SNTP syncs once after connecting, is then stopped, and resyncs daily with uploads paused during the sync. This avoids a core 3.3.12 crash where `hostByName` clears the DNS cache during an SNTP lookup. `NET STATUS` also prints `@NET,ADDRESS` (IP, gateway, DNS).
@@ -30,7 +30,7 @@ Use the ESP32-C3 SuperMini, MQ-135 module, two 10 kOhm divider resistors, AHT20/
 
 ## Build without uploading
 
-Install Arduino IDE and **ESP32 by Espressif Systems**. AHT20 and BMP280 support is local to this sketch. `Wire`, `Preferences`, Wi-Fi, TLS, HTTP and cJSON come with the ESP32 core. The October build used core **3.3.11**; the November repair build uses installed core **3.3.12**.
+Install Arduino IDE, **ESP32 by Espressif Systems**, Adafruit SSD1306, GFX and BusIO. AHT20 and BMP280 support is local to this sketch. `Wire`, `Preferences`, Wi-Fi, TLS, HTTP and cJSON come with the ESP32 core. The October build used core **3.3.11**; the November repair build uses installed core **3.3.12**.
 
 From the repository root in PowerShell:
 
@@ -87,7 +87,7 @@ Accepted calibration remains in the unchanged `coopcal` namespace with the exist
 - Owner/capacity upload pauses leave local sensing and warnings running. Exchanges usually slow to 60 seconds; pending command receipts temporarily use 2 seconds so commands can acknowledge/complete. The deployed backend does not persist fresh device state/readings/logs while data writes are paused, so dashboard values can become stale. Existing stored history remains accessible where provider quotas permit.
 - Local logs aggregate status changes and command/calibration outcomes; routine sample blocks stay on USB Serial. Firmware buffers and backend hourly log limits can discard logs. The cloud console is not a copy of ROM bootloader output or every USB line.
 
-Firmware `cloudflare-1.0.1` makes USB TX nonblocking and skips optional sample blocks when the host does not consume data. Cloud publication precedes optional Serial output. `NET STATUS` includes Wi-Fi status/RSSI, clock readiness, HTTP and TLS errors, attempt/success uptime, free heap and network-task stack headroom. It omits credentials. Transport connection/read timeouts are 15 seconds; TLS validation remains enabled. The 10 October physical history readback confirmed approximately two-second sampling and continued HTTPS uploads with the serial reader closed.
+Firmware `cloudflare-1.0.1` makes USB TX nonblocking and skips optional sample blocks when the host does not consume data. Cloud publication/OLED update precede optional Serial output. `NET STATUS` includes Wi-Fi status/RSSI, clock readiness, HTTP and TLS errors, attempt/success uptime, free heap and network-task stack headroom. It omits credentials. Transport connection/read timeouts are 15 seconds; TLS validation remains enabled. The 10 October physical history readback confirmed approximately two-second sampling and continued HTTPS uploads with the serial reader closed.
 
 D1 keeps recent full-resolution samples for 30 days. Older data is archived to private compressed R2 files with checksum/readback verification before deleting the matching D1 source. See [operations](../../cloud/coop-monitor-worker/OPERATIONS.md). Included-capacity guards and billing notifications do not guarantee a provider-enforced zero-cost cap.
 
@@ -124,6 +124,7 @@ Wi-Fi/device credential updates and calibration import are USB-only. No free-for
 | Command | Action |
 |---|---|
 | `I2C SCAN` | USB-only address scan, bus pins/clock, readiness and last AHT error |
+| `OLED TEST` | USB-only SSD1306 border/text test for 15 seconds; requires visual confirmation |
 | `CAL START`, `CAL CANCEL` | Start/cancel clean-air calibration |
 | `CAL SHOW`, `CAL EXPORT`, `CAL IMPORT,...` | Inspect/back up/restore calibration |
 | `CONFIG SHOW` | Applied monitoring configuration |
@@ -136,9 +137,9 @@ The endpoint is restricted to `https://coop-monitor-worker.coop-monitor-worker.w
 
 ## Troubleshooting and acceptance
 
-For AHT diagnosis, run `I2C SCAN` at 115200 baud with Newline. Expected addresses are AHT20 `0x38` and BMP280 `0x76`/`0x77`. If a device appears after an initial failed probe, the retry path can recover without rebooting. Keep the existing GPIO4 SDA/GPIO5 SCL and 3V3 supply mapping.
+For AHT/OLED diagnosis, run `I2C SCAN` at 115200 baud with Newline. Expected addresses are AHT20 `0x38`, OLED `0x3C`/`0x3D`, and BMP280 `0x76`/`0x77`. If a device appears after an initial failed probe, the retry path can recover without rebooting. A blank replacement display with an ACK still needs `OLED TEST` and inspection of its actual printed pin labels/controller; matching a seller's module code or the old connector position is insufficient. Keep the existing GPIO4 SDA/GPIO5 SCL and 3V3 supply mapping.
 
-Local AHT20 fault/timing and BMP280 regression tests (requires `g++` on PATH):
+Local AHT20 fault/timing and OLED transport/retry regression tests (requires `g++` on PATH):
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".\firmware\coop_monitor\test_aht20.ps1"

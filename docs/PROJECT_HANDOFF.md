@@ -12,8 +12,8 @@ Refreshed **18 November 2026 (Asia/Jakarta)** for the next developer or coding a
 | Firmware source | `cloudflare-1.2.0` (commit `14027c0`, 15 Nov), protocol 1, ESP32-C3 SuperMini, USB-only updates |
 | Configured backend | Worker `coop-monitor-worker`, D1 `coop-monitor-db`, private R2 `coop-monitor-archives`; retention 30 days; crons every 15 minutes (maintenance) and every 5 minutes (gas alerts) |
 | Last recorded rollout | 18 November, Worker `84bbab7f-8749-4e3e-9472-c33f847a48e4` (gas-warning alert settings; Overview trend views in `3af342f6` the same day); migrations 0001–0004, none added since; [dated record](../cloud/coop-monitor-worker/DEPLOYMENT.md) |
-| Last recorded physical checks | 4 November: replacement AHT/BMP and closed-lid tests, each 180 consecutive readings / 15 minutes with zero retries/final failures; Wi-Fi intentionally off |
-| Last recorded device state | 15 November: `cloudflare-1.2.0` installed by USB and checked over Serial. Last full settings readback 4 November: revision 4, five-second sampling, mq135-02 calibration missing; 100 kHz bus. Backend holds no coop readings after 10 November |
+| Last recorded physical checks | 4 November: replacement AHT/BMP and closed-lid tests, each 180 consecutive readings / 15 minutes with zero retries/final failures; OLED disconnected, Wi-Fi intentionally off |
+| Last recorded device state | 15 November: `cloudflare-1.2.0` installed by USB and checked over Serial. Last full settings readback 4 November: revision 4, five-second sampling, mq135-02 calibration missing; 100 kHz bus, OLED disabled. Backend holds no coop readings after 10 November |
 | Local checks | 18 November: 139/139 backend Node tests with the bundled Node 24.22.1; firmware compilation not run in this refresh. Older results: see [verification](../VERIFICATION.md) |
 
 On 18 November the public `/health` endpoint and five dashboard asset hashes were checked. Installed firmware, device connectivity, provider usage and physical condition were not inspected. Recorded state is dated evidence, not proof of present device operation. No credentials, connected accounts or private captures were read to produce this handoff.
@@ -57,8 +57,8 @@ Windows blocked the same invocation without `-ExecutionPolicy Bypass` during the
 
 | Responsibility | Read/edit here |
 |---|---|
-| Sampling, sensors, calibration and local warning guards | [coop_monitor.ino](../firmware/coop_monitor/coop_monitor.ino) |
-| Checked sensor acquisition | [aht20_reader.h](../firmware/coop_monitor/aht20_reader.h), [bmp280_reader.h](../firmware/coop_monitor/bmp280_reader.h) |
+| Sampling, sensors, OLED, calibration and local warning guards | [coop_monitor.ino](../firmware/coop_monitor/coop_monitor.ino) |
+| Checked sensor acquisition / deferred OLED transport | [aht20_reader.h](../firmware/coop_monitor/aht20_reader.h), [bmp280_reader.h](../firmware/coop_monitor/bmp280_reader.h), [oled_transport.h](../firmware/coop_monitor/oled_transport.h) |
 | Field preflight / gate / regression | [preflight_field_run.ps1](../firmware/coop_monitor/preflight_field_run.ps1), [field_readiness.ps1](../firmware/coop_monitor/field_readiness.ps1), [test_field_readiness.ps1](../firmware/coop_monitor/test_field_readiness.ps1) |
 | Version, endpoint, monitoring/record types, capacities and CRC | [dashboard_protocol.h](../firmware/coop_monitor/dashboard_protocol.h) |
 | HTTPS, NTP, NVS settings/receipts, retries, command dispatch and network task | [dashboard_runtime.h](../firmware/coop_monitor/dashboard_runtime.h) |
@@ -84,10 +84,10 @@ No always-on/scheduled Serial capture; optional capture stays manually started/s
 
 | Area | Next work | Completion evidence |
 |---|---|---|
-| Field launch priority | Follow [5 November procedure](FIELD_RUN_2026-11-05.md); retain replacement sensors and firmware 1.0.4 | Actual field start, fresh accepted exchanges and advancing persisted History on final standalone power |
+| Field launch priority | Follow [5 November procedure](FIELD_RUN_2026-11-05.md); retain replacement sensors, firmware 1.0.4 and disabled OLED | Actual field start, fresh accepted exchanges and advancing persisted History on final standalone power |
 | MQ qualification | Complete conditioning and obtain an accepted clean-air profile for mq135-02 | Recorded conditioning history and replacement profile; raw-only limitation until accepted |
 | Physical continuity | Recheck fresh telemetry and installed version; independent power cycle; compare calibration/provisioning | Timestamped physical observation plus backend readback; retained calibration and settings |
-| Warning/settings | Verify warm-up/invalid/calibration guards; exercise chosen interval/threshold settings | Desired/applied convergence, measured cadence and guarded warning behavior |
+| Warning/settings | Keep OLED deferred; verify warm-up/invalid/calibration guards; exercise chosen interval/threshold settings | Desired/applied convergence, measured cadence and guarded warning behavior |
 | Commands | Exercise each allowed command, expiry, reconnect, restart and interrupted recovery | Receipts and actual handler outcome; uncertainty recorded where completion cannot be proved |
 | Outages/pause | Wi-Fi loss/reconnect, buffer overflow, owner pause and resume | Pending/drop counts, boot/sequence coverage and explicit unrecoverable gaps |
 | Field study | Planned seven-day collection with daily coverage/export checks; measured account usage and actual start/end | Exported coverage/reliability/resource report; no assumption of free-capacity headroom |

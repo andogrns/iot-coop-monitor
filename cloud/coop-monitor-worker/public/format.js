@@ -82,7 +82,6 @@ export const STATUS_TOKENS = {
   BMP_ERROR: { label: 'Pressure sensor error', tone: 'warn', detail: 'The BMP280 sensor is not responding, so pressure is unavailable. Gas warnings are paused until it recovers.' },
   MQ_ADC_HIGH: { label: 'Gas sensor signal too high', tone: 'warn', detail: 'The gas sensor signal is at the top of its measurable range. Gas warnings are paused; check the sensor wiring and supply.' },
   CAL_MISSING: { label: 'Not calibrated', tone: 'warn', detail: 'The gas sensor has no calibration, so gas warnings are disabled. Run calibration from the Console.' },
-  // Only in readings stored before the display code was removed (18 November 2026).
   OLED_ERROR: { label: 'Display error', tone: 'warn', detail: 'The monitor’s small screen is not responding. Readings are not affected.' },
   CAL_STABILIZING: { label: 'Calibrating (settling)', tone: 'info', detail: 'Calibration is waiting for the sensor to settle. Gas warnings are paused.' },
   CAL_COLLECTING: { label: 'Calibrating (measuring)', tone: 'info', detail: 'Calibration is collecting baseline samples. Gas warnings are paused.' },
