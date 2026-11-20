@@ -1,5 +1,27 @@
 # Coop Monitor verification
 
+## History numbered pages: 20 November 2026 (deployed as `c10a2a0f`)
+
+- **Change (user request):** the History tab's "Load more" button is replaced by numbered pages. The page size is the existing Rows per page setting. Backend: optional `offset` on entry-paged `/api/history` (`src/history-pages.js`). Dashboard: `public/app.js`, `index.html`, `history.css`, new `public/history-pager.js`. No migration, binding, secret or cron change; firmware and device protocol are unchanged.
+- **Tests:** `node --test scripts/*.test.mjs` in `cloud/coop-monitor-worker` with the bundled Node v24.22.1: 144/144 pass. That is the 139 from before, 3 new offset tests in `history.test.mjs` (offset pages equal cursor pages across overlapping boots, equal timestamps, partial edge blocks, empty blocks, latest mode and validation) and 2 in the new `history-pager.test.mjs`. `node --check` passes on the changed JS files.
+- **Synthetic benchmark (node:sqlite, 31 days, one boot):** offset pages were exact against the expected order in both directions (page 2, 10%, middle, last page, past the end). A deep jump took at most 0.19 s at 5-second sampling (518,400 readings) and 0.7 s at 2-second sampling (1,296,000). For comparison, the existing selection count took 0.25 and 0.62 s. A plain SQL `OFFSET` took 1.2 to 5 s, so it is used only for the short remainder.
+- **Browser (headless Chrome, local synthetic preview, no production):** 20/20 checks passed:
+  - Latest view: page 1 of the counted pages.
+  - Next (cursor) and page-number (offset) routes give identical rows.
+  - Last page: No. ends at 1 and Next is disabled.
+  - Typed page numbers: an oversized number clamps to the last page; invalid input is ignored.
+  - Enter on Next keeps the focus.
+  - Rows per page and order changes restart at page 1.
+  - Last 24 h, Last hour, short custom ranges and empty custom ranges behave as before.
+  - Switching to a never-connected device and back works.
+  - Phone width (375 px): arrow-only Previous/Next, five page slots, no sideways scroll.
+  - Overview, Console, Settings and Archives open without console errors.
+
+  Failure paths 3/3: without a count the pager steps page by page; a failed page request keeps the current page and shows a toast.
+- **Production D1, read-only, before the deploy:** the real `historyPage()` ran SELECT statements through `wrangler d1 execute --remote` on `coop-monitor-01` data (21 October to 18 November, 95,950 readings, several boots). Five offset pages (newest first: offset 100, middle and last; oldest first: one third and last) each equal a plain full sort.
+- **Deploy (user-requested):** before the deploy, `84bbab7f` was current. The live `index.html`, `app.js` and `history.css` matched Git HEAD; every other checked live asset matched local. Wrangler uploaded 4 assets (15 already present) and reported version `c10a2a0f-425a-426c-ae9c-c73b071259f9`. After the deploy: `/health` ok; 12 live assets match local, including `history-pager.js` and the versioned `app.js` URL. Anonymous `/api/history` (with `offset`), `/api/snapshot` and `/api/archives/selection` return 401; the CSP header is present.
+- **Not checked:** the authenticated live dashboard (the agent did not sign in), Safari/Firefox and a real phone. No D1/R2 write, no device action, no Git commit. The newest stored reading was still 18 November 17:06 UTC, so the device had not uploaded since.
+
 ## OLED no longer used: 18 November 2026 (decision only)
 
 - **Decision (user):** the OLED module is not used any more. The earlier OLED records in this file and in `PROJECT_CONTEXT.md` stay as history of how the project progressed.

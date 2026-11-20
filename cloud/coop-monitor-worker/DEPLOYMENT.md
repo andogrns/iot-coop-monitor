@@ -1,5 +1,14 @@
 # Cloudflare deployment record
 
+**20 November 2026 rollout (user-requested in the same task):** version `c10a2a0f-425a-426c-ae9c-c73b071259f9` replaces `84bbab7f`. The History tab now shows numbered pages instead of "Load more", with Rows per page as the page size.
+- **Backend:** `src/history-pages.js` accepts an optional `offset` on entry-paged `/api/history`.
+- **Assets:** `app.js`, `index.html`, `history.css` and the new `history-pager.js`.
+- **Unchanged:** no migration, secret, binding, var or cron change.
+- **Before deploy:** `84bbab7f` was current. The live `index.html`, `app.js` and `history.css` matched Git HEAD; the other live assets matched local. 144/144 tests passed and `version-assets.mjs` reported 0 changes. The new SQL ran read-only on production D1 and gave five offset pages equal to a plain sort.
+- **Wrangler:** 4 assets uploaded, 15 already present.
+- **After deploy:** `/health` ok; 12 live asset SHA-256 values match local; anonymous `/api/history`, `/api/snapshot` and `/api/archives/selection` return 401.
+- **Not done:** no D1/R2 write and no device action; the authenticated dashboard was not opened by the agent.
+
 **18 November 2026, second rollout (user-authorized):** version `84bbab7f-8749-4e3e-9472-c33f847a48e4` replaces `3af342f6`. Adds dashboard-configurable gas-warning alerts (Settings > Gas warning alerts): new `src/notify.js`, shared `public/alert-settings.js`, `public/alerts.js`, changes to `src/gas-alerts.js`, `src/device-alerts.js`, `src/app.js` (routes `GET/PUT /api/alerts`, `POST /api/alerts/test`), `app.js`, `index.html`, `console.css`. No migration, secret, binding, var or cron change; settings live in `system_state` keys `alert_settings`/`alert_delivery`, created only when saved or sent. Before deploy: `3af342f6` was live; every untouched live asset matched local; `src/` changes vs HEAD were only this feature; 139/139 tests; `version-assets.mjs` 0 changes. Wrangler: 5 assets uploaded, 13 already present. After deploy: `/health` ok; live `index.html`, `app.js`, `alerts.js`, `alert-settings.js`, `console.css`, `trends.js`, `style.css`, `format.js`, `ui.js`, `console.js` SHA-256 match local; anonymous `GET/PUT /api/alerts`, `POST /api/alerts/test` and `/api/snapshot` return 401. No D1/R2 write by the agent, no device action, no Git commit. The authenticated dashboard and a real Discord delivery were not checked by the agent.
 
 **18 November 2026, rollout (user-authorized after reviewing the local preview):** version `3af342f6-0121-4106-a93d-63fbe3ab9a96` replaces `84598cb1`. Adds two Overview trend views, **Side by side** (four small-multiple charts on a shared time axis) and **All in one** (every reading indexed to its own range on one axis), next to the unchanged Single view. Assets only: `index.html`, `app.js`, `trends.js`, `style.css` (Wrangler uploaded 4, 12 already present). No backend, migration, secret, binding or cron change. Before deploy: 129/129 Node tests; `version-assets.mjs` 0 changes; `84598cb1` still current; all other live assets matched local. After deploy: `/health` ok; seven live asset SHA-256 values match local; anonymous snapshot, history and command list 401. The authenticated dashboard was not opened by the agent; no D1/R2 write or device action.
@@ -12,7 +21,7 @@
 
 **15 November 2026 rollout (user-authorized after local tests):** version `a32e1471-5276-438d-a0dd-0fac41693723`. Adds optional `state.health` storage, `recentBoots` in the snapshot, a Device health card on Overview, and Discord offline/back-online alerts on the existing `*/5` cron. No schema migration, secret or binding change. Before deploy: 113/113 local Node tests passed (7 new in `scripts/device-health.test.mjs`) and a dry run built. After deploy: `/health` returned `ok`, and live `app.js`, `index.html` and `style.css` SHA-256 matched local files. Not yet observed: a real health report from firmware 1.1.0, or a real Discord offline/online delivery (the bot invitation was still open on 13 November).
 
-**Record scope:** latest recorded rollout is **18 November 2026**, Worker `84bbab7f-8749-4e3e-9472-c33f847a48e4`; see the first entry below. The 18 November documentation refresh made only a public `/health` and asset-hash check and used no account, D1/R2 or device access. Infrastructure values retain their original verification dates and are not today's account status.
+**Record scope:** latest recorded rollout is **20 November 2026**, Worker `c10a2a0f-425a-426c-ae9c-c73b071259f9` (History numbered pages); see the first entry below. Infrastructure values retain their original verification dates and are not today's account status.
 
 Updated 13 October 2026, Asia/Jakarta. Archives now shows one expandable entry per session with label/range/archive date, individual files and all/selected ZIP downloads. All nine deployed asset hashes matched; live Home Testing Session metadata, original-file preservation and independently decoded ZIPs passed (19 files / 2,206 entries; selected two / 1,245). Earlier History range counts, DD/MM/YYYY dates, ordering and page sizes remain. No migration was needed. This rollout checked public assets/health and the named archive only; device/infrastructure values not explicitly rechecked retain their earlier verification date. Authenticated production browser UI and fresh physical acceptance were not tested.
 
@@ -23,7 +32,7 @@ Updated 13 October 2026, Asia/Jakarta. Archives now shows one expandable entry p
 | Dashboard origin | `https://coop-monitor-worker.coop-monitor-worker.workers.dev` |
 | Device exchange | `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange` |
 | Protocol | Version 1 |
-| Last recorded version | `84bbab7f-8749-4e3e-9472-c33f847a48e4` (18 November configurable gas-warning alerts; no migration) |
+| Last recorded version | `c10a2a0f-425a-426c-ae9c-c73b071259f9` (20 November History numbered pages; no migration) |
 | D1 database | `coop-monitor-db` |
 | D1 ID | `ea267d2d-f237-4374-9c72-d4fd6efb632c` |
 | D1 location | APAC; queries served by primary in HKG during checks |

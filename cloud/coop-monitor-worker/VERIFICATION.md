@@ -1,5 +1,16 @@
 # Backend verification
 
+## History numbered pages — 20 November 2026, deployed as `c10a2a0f`
+
+Entry-paged `/api/history` accepts an optional `offset` without a cursor (see API.md). A seek picks a pivot block from minute-block sizes, counts the entries beyond it exactly (whole interior blocks by `json_array_length`, edge blocks entry by entry) and skips only the remainder with `OFFSET`. Results equal cursor paging. Evidence:
+- **Tests:** 144/144 Node tests, including offset pages equal to cursor pages across overlapping boots, equal timestamps, edge and empty blocks, latest mode and validation.
+- **Synthetic timing (31 days):** offset pages are exact in both orders. A deep jump took ≤0.19 s at 5-second sampling and ≤0.7 s at 2-second sampling, versus 0.25 and 0.62 s for the existing selection count.
+- **Production D1 before deploy:** a read-only run of the real code gave five offset pages equal to a plain full sort (95,950 readings).
+- **Browser:** 20/20 synthetic checks of the dashboard pager, plus 3 failure-path checks.
+- **Rollout:** Worker `c10a2a0f-425a-426c-ae9c-c73b071259f9`; 12 live asset hashes match; anonymous private routes return 401.
+
+The authenticated live dashboard was not opened by the agent. Details: root [verification](../../VERIFICATION.md).
+
 ## Documentation and local baseline — 22 October 2026
 
 Source/contract/documentation review only, with **82/82 Node tests** and **50/50 isolated workerd/Miniflare checks** passing on Node v24.19.0. The latter uses synthetic credentials, local D1/R2 and disabled outbound service. Wrangler 4.148.0 was checked locally with the process-only execution-policy override documented in the handoff. No production credentials, account or endpoint was accessed; no cloud/device writes, migration, deployment or Git publication occurred.

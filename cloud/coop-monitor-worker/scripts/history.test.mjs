@@ -166,3 +166,61 @@ test('entry pagination validates page size and binds cursors to device and date 
   await assert.rejects(query({...range,cursor:first.nextCursor,to:new Date(anchor+3600001).toISOString()}),e=>e.code==='invalid_cursor');
  }finally{db.close();}
 });
+
+// Numbered pages: offset (no cursor) must return exactly the slice that cursor paging reaches.
+const walk=async(query,params)=>{let cursor=null,all=[];do{const p=await query({...params,...(cursor?{cursor}:{})});all.push(...p.readings.map(r=>`${r.bootId}:${r.seq}`));cursor=p.nextCursor;}while(cursor);return all;};
+test('offset pages equal cursor pages across overlapping boots, partial edge blocks and empty blocks',async()=>{
+ const {db,add,query}=fixture(),base=Math.floor((Date.now()-5*3600000)/60000)*60000;
+ try{
+  // Three boots whose minute blocks overlap (anchors 0 s, 17 s and 41.5 s past the minute), with gaps and empty blocks.
+  for(const [boot,shift,minutes,every] of [['boot-a',0,180,5000],['boot-b',17000,150,7000],['boot-c',41500,120,12000]]){
+   let seq=0;
+   for(let minute=0;minute<minutes;minute++){
+    if(boot==='boot-b'&&minute>=40&&minute<55){add(boot,base+shift,[],'test-device',minute*60000);continue;}
+    add(boot,base+shift,Array.from({length:Math.floor(60000/every)},(_,n)=>sample(++seq,minute*60000+n*every)));
+   }
+  }
+  add('other',base,[sample(1,0)],'other-device');
+  const range={mode:'range',from:new Date(base+29500).toISOString(),to:new Date(base+170*60000+12345).toISOString()};
+  for(const order of ['desc','asc'])for(const pageSize of [50,100,250]){
+   const all=await walk(query,{...range,order,pageSize:1000});
+   assert.ok(all.length>2000);
+   const last=Math.ceil(all.length/pageSize);
+   for(const page of [1,2,3,Math.floor(last/3),Math.floor(last/2),last-1,last,last+1]){
+    const result=await query({...range,order,pageSize,offset:(page-1)*pageSize});
+    assert.deepEqual(result.readings.map(r=>`${r.bootId}:${r.seq}`),all.slice((page-1)*pageSize,page*pageSize),`${order} size ${pageSize} page ${page}`);
+    assert.equal(result.offset,(page-1)*pageSize);
+    assert.equal(result.nextCursor!==null,page*pageSize<all.length);
+    if(result.nextCursor){const next=await query({...range,order,pageSize,cursor:result.nextCursor});assert.deepEqual(next.readings.map(r=>`${r.bootId}:${r.seq}`),all.slice(page*pageSize,(page+1)*pageSize));}
+   }
+  }
+ }finally{db.close();}
+});
+test('offset pages handle equal sample times across boots and every offset near a block boundary',async()=>{
+ const {db,add,query}=fixture(),anchor=Math.floor((Date.now()-3600000)/60000)*60000;
+ try{
+  for(let n=0;n<120;n++)add('boot-'+String(n).padStart(3,'0'),anchor+(n%2?59000:0),[sample(n+1,n%2?1000:60000),sample(n+501,n%2?31000:90000)]);
+  const range={mode:'range',from:new Date(anchor).toISOString(),to:new Date(anchor+40*60000).toISOString()};
+  for(const order of ['desc','asc']){
+   const all=await walk(query,{...range,order,pageSize:1000});
+   for(let offset=0;offset<=all.length+1;offset+=7){
+    const result=await query({...range,order,pageSize:50,offset});
+    assert.deepEqual(result.readings.map(r=>`${r.bootId}:${r.seq}`),all.slice(offset,offset+50),`${order} offset ${offset}`);
+   }
+  }
+ }finally{db.close();}
+});
+test('offset pages work in latest mode and validate the offset',async()=>{
+ const {db,add,query}=fixture(),anchor=Date.now()-3600000;
+ try{
+  for(let minute=0;minute<50;minute++)add('boot',anchor,Array.from({length:6},(_,n)=>sample(minute*6+n+1,minute*60000+n*10000)));
+  const page=await query({pageSize:50,offset:100});
+  assert.deepEqual(page.readings.map(r=>r.seq),Array.from({length:50},(_,n)=>200-n));assert.equal(page.mode,'latest');
+  const pinned={mode:'range',from:page.from,to:page.to};
+  assert.deepEqual((await query({...pinned,pageSize:50,offset:250})).readings.map(r=>r.seq),Array.from({length:50},(_,n)=>50-n));
+  assert.deepEqual((await query({...pinned,pageSize:50,offset:0})).readings.map(r=>r.seq),(await query({...pinned,pageSize:50})).readings.map(r=>r.seq));
+  for(const offset of [-1,1.5,'x',2000001])await assert.rejects(query({pageSize:50,offset}),e=>e.status===400);
+  await assert.rejects(query({pageSize:50,offset:50,cursor:page.nextCursor}),e=>e.code==='invalid_offset');
+  assert.equal((await query({pageSize:50,offset:0,cursor:page.nextCursor})).readings.length,50);
+ }finally{db.close();}
+});

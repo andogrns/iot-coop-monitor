@@ -6,10 +6,21 @@ Updated **18 November 2026 (Asia/Jakarta)** from local source, Git state, a publ
 
 - **Firmware source:** `cloudflare-1.2.0` (commit `14027c0`, 15 Nov): microSD backup and remote SD commands. Last recorded install: USB upload on 15 Nov, checked over Serial. Not read since.
 - **Device evidence gap:** the backend's newest coop reading is 10 Nov (the 15 Nov bench boots were deleted at the user's request). Whether the device runs 1.2.0 and uploads now is unverified.
-- **Worker:** live `84bbab7f` (18 Nov): Settings gas-warning alerts, plus the Overview side-by-side and all-in-one views (`3af342f6`, same day). Public check: `/health` ok; the checked live assets match the local files.
+- **Worker:** live `c10a2a0f` (20 Nov): History numbered pages (see the next entry). It builds on `84bbab7f` (18 Nov, Settings gas-warning alerts) and the Overview side-by-side and all-in-one views (`3af342f6`, same day). After deploy: `/health` ok; the checked live assets match the local files. The 20 Nov change is not committed to Git.
 - **Git:** local `main` holds the 18 Nov Worker commit and the docs-refresh commit, not pushed. `origin/main` was `221dd07` (15 Nov) at the last fetch. The Week 1 notebook, `build_nb.py` and the 17 Nov handoff are still uncommitted.
 - **OLED:** no longer used (user decision, 18 November 2026). The notes below stay as project history. The firmware source keeps the disabled OLED code because no re-flash is planned; remove it at the next flash.
 - **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded).
+
+## History numbered pages (20 November 2026, deployed as `c10a2a0f`)
+
+The user asked for the History tab's "Load 100 more" button to become numbered pages (1, 2, 3, …), sized by the existing Rows per page setting, and to deploy once tested. **Implemented, tested and deployed** the same day; not committed to Git. Firmware, device protocol and migrations are unchanged.
+
+- **Dashboard:** the table shows one page at a time. Below it: Previous/Next, page numbers (first, last and the pages around the current one, with … gaps; 7 slots, 5 on phones) and a "Page [n] of N" box. A typed number past the end opens the last page.
+- **Paging rules:** every page of a view reads one pinned window: the applied range, or for Latest the window its first response reported. Pages therefore do not shift while new readings arrive; choosing Latest again refreshes. The page count comes from the existing selection count, and for Latest from a count of its pinned window. Changing size, order, view or device returns to page 1.
+- **No. column:** it now counts across all pages (1 = oldest reading of the view). With newest first it stays blank until the count arrives. Without a count, the pager steps page by page.
+- **Backend:** optional `offset` on entry-paged `/api/history` (`src/history-pages.js`, documented in API.md). Neighbouring pages still follow cursors. A jump uses a seek: block sizes pick a pivot, one exact count follows, and only a short remainder goes through SQL `OFFSET`. A deep jump costs about one selection count (synthetic 31 days: ≤0.19 s at 5-second sampling). It relies on the existing rule that each reading lies within 60 s after its block start.
+- **Evidence:** 144/144 tests, 20/20 synthetic browser checks plus failure paths, and a read-only production D1 comparison (5 pages equal a plain sort). Details are in VERIFICATION.md.
+- **Open:** user review of the live History tab (the agent did not sign in); Safari/Firefox and a real phone were not checked.
 
 ## Configurable gas-warning alerts (18 November 2026, deployed as `84bbab7f`)
 
@@ -229,7 +240,7 @@ See [stack architecture](docs/STACK_ARCHITECTURE.md), [project handoff](docs/PRO
 
 Signal provides 1h/6h/12h/24h trends. Full loads page through the existing history API; incremental refresh overlaps two minutes. Very late arrivals need **Refresh trend**. Lines break at missing measurements, boot changes and time gaps.
 
-History defaults to 100 recent entries, newest first. Page sizes: 50/100/250/500/1000, with both time orders. From/To totals count the entire inclusive selection independently of loaded rows; editing dates does not load the table until submission. Table dates are DD/MM/YYYY in the browser timezone.
+History defaults to 100 recent entries, newest first, shown as numbered pages (20 November 2026; previously "Load more"). Page sizes: 50/100/250/500/1000, with both time orders. From/To totals count the entire inclusive selection independently of loaded rows; editing dates does not load the table until submission. Table dates are DD/MM/YYYY in the browser timezone.
 
 Manual archives move selected readings to verified private gzip files, retaining retry fingerprints. Jobs resume with **Continue archiving**. Each manual archive ID is one folder; duplicate labels remain distinct. Automatic files group by UTC day (changed 15 November 2026 from one folder per hour, about 24 folders a day; deployed as `da2869c5`, see VERIFICATION.md). Each day folder still holds the hourly R2 files unchanged. All/selected ZIP downloads preserve original gzip bytes and verify SHA-256. Download all follows every file page. [API details](cloud/coop-monitor-worker/API.md).
 

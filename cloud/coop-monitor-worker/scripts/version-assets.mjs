@@ -6,7 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 const root = new URL('../public/', import.meta.url);
-const ORDER = ['csv.js', 'archive-zip.js', 'format.js', 'ui.js', 'trends.js', 'history-export.js', 'history-selection.js',
+const ORDER = ['csv.js', 'archive-zip.js', 'format.js', 'ui.js', 'trends.js', 'history-export.js', 'history-selection.js', 'history-pager.js',
   'manual-archive.js', 'archive-library.js', 'console.js', 'alert-settings.js', 'alerts.js', 'app.js', 'style.css', 'history.css', 'console.css', 'archives.css', 'index.html'];
 const versions = new Map();
 let changed = 0;

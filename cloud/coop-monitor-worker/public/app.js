@@ -3,6 +3,7 @@ import { METRICS, createTrends } from './trends.js?v=8ebf1b0bab53';
 import { createManualArchives } from './manual-archive.js?v=42f0aa27fd9a';
 import { createArchiveLibrary } from './archive-library.js?v=ac6e99daf55f';
 import { createHistorySelection } from './history-selection.js?v=08b600a0173d';
+import { pageCount, pageItems } from './history-pager.js?v=c7136edb1112';
 import { describeStatus, formatBytes, formatDateTime, formatNumber, hasStatus } from './format.js?v=0242141ec619';
 import { formatDate, formatTime } from './format.js?v=0242141ec619';
 import { badge, banner, clearRelativeTime, confirmDialog, el, emptyState, notice, setClock, setRelativeTime } from './ui.js?v=c84da061d886';
@@ -11,7 +12,7 @@ import { createAlertsTab } from './alerts.js?v=4e5e1dd39dd2';
 
 // ===== Shared state, API and helpers =====
 const $ = id => document.getElementById(id);
-let snapshot, active = 'overview', historyCursor = null, logCursor = null, selected = '', formDevice = '', allReadings = [], historyRequest = 0;
+let snapshot, active = 'overview', logCursor = null, selected = '', formDevice = '', allReadings = [], historyRequest = 0;
 let serverOffset = 0, refreshPending = false, tabOpened = false;
 let historyLatest = true, historyRange = null;
 const TABS = ['overview', 'history', 'console', 'settings', 'archives'];
@@ -359,9 +360,10 @@ $('login-form').addEventListener('submit', async e => {
 });
 $('logout').addEventListener('click', async () => { try { await send('/auth/logout', 'POST', {}); showLogin(); } catch (e) { notice(e.message, 'error'); } });
 $('device').addEventListener('change', () => {
-  selected = $('device').value; formDevice = ''; historyCursor = logCursor = null; allReadings = []; historyRequest++;
+  selected = $('device').value; formDevice = ''; logCursor = null; allReadings = []; historyRequest++;
+  historyCursors = new Map(); historyHasNext = false; historyPage = historyTarget = 1; historyWindow = null;
   manualArchives.reset(); historySelection.reset(); historyExport.reset(); archiveLibrary.reset();
-  $('history-rows').replaceChildren(); $('history-count').textContent = ''; $('more-history').hidden = true; $('logs').textContent = '';
+  $('history-rows').replaceChildren(); $('history-count').textContent = ''; $('history-pager').hidden = true; $('logs').textContent = '';
   render();
   if (active === 'history') { historySelection.countSelection(); loadHistory(true, true).catch(e => notice(e.message, 'error')); }
   if (active === 'archives') { loadArchives(true).catch(e => notice(e.message, 'error')); manualArchives.countSelection(); }
@@ -373,7 +375,13 @@ $('device').addEventListener('change', () => {
 const HISTORY_PRESETS = { '1h': 3600000, '24h': 86400000, '7d': 7 * 86400000 };
 const HISTORY_FAULTS = ['AHT_ERROR', 'BMP_ERROR', 'MQ_ADC_HIGH'];
 const HISTORY_ESTIMATED = 'Estimated time: the monitor’s clock had not been set yet (for example just after a restart), so this time was worked out from how long it had been running. It may be off by a few seconds.';
+// The table shows one numbered page at a time (Rows per page). Every page of a view reads the same
+// pinned window: the applied range, or for Latest the window its first page reported, so pages
+// never shift while new readings arrive. Neighbouring pages reuse the server's cursors; any other
+// page is opened by offset. historyState: idle | loading (new view) | paging (another page) | ready | error.
 let historyView = 'latest', historyState = 'idle', historyError = '', historyTotal = null, historyApplied = null, historyOrder = 'desc';
+let historyPage = 1, historyTarget = 1, historyPageSize = 100, historyHasNext = false, historyCursors = new Map(), historyWindow = null, historyCountRequest = 0;
+const HISTORY_NARROW = window.matchMedia('(max-width: 640px)');
 const historyPlural = n => `${n.toLocaleString()} ${n === 1 ? 'reading' : 'readings'}`;
 const historyDirty = () => historyView === 'custom' && !!historyApplied && ($('from').value !== historyApplied.from || $('to').value !== historyApplied.to);
 function historyRangeProblem(fromValue, toValue) {
@@ -403,19 +411,27 @@ function historyRow(r, number) {
   const title = `${status.detail}\nFirmware status: ${r.status ?? 'none'}`;
   if (status.tone === 'ok') { const ok = el('span', 'history-ok', status.label); ok.title = title; statusCell.append(ok); }
   else statusCell.append(badge(status.label, status.tone, title));
-  tr.append(el('td', 'num history-no', number.toLocaleString()), time, value(r.mqMv, 0), value(r.mqRatio, 2),
+  tr.append(el('td', 'num history-no', number ? number.toLocaleString() : ''), time, value(r.mqMv, 0), value(r.mqRatio, 2),
     value(r.ahtTemperatureC, 1), value(r.humidityPct, 1), value(r.pressureHpa, 1), statusCell);
   return tr;
 }
-function renderHistory(order = historyOrder) {
-  const n = allReadings.length;
-  // No. keeps the time-order rule: 1 is the oldest row shown, in either order.
-  $('history-rows').replaceChildren(...allReadings.map((r, i) => historyRow(r, order === 'asc' ? i + 1 : n - i)));
+function renderHistory() {
+  const n = allReadings.length, start = (historyPage - 1) * historyPageSize;
+  // No. keeps the time-order rule across pages: 1 is the oldest reading of the whole view, in either order.
+  // Newest first needs the total; until it is counted it is known only on the last page.
+  const total = historyTotal ?? (!historyHasNext && n ? start + n : null);
+  $('history-rows').replaceChildren(...allReadings.map((r, i) => {
+    const number = historyOrder === 'asc' ? start + i + 1 : total !== null ? total - start - i : 0;
+    return historyRow(r, number > 0 ? number : 0);
+  }));
 }
+const historyPages = () => pageCount({ total: historyTotal, pageSize: historyPageSize, page: historyPage, rows: allReadings.length, hasNext: historyHasNext });
 
 function renderHistoryView() {
   const d = current(), never = connection(d).never, latest = historyView === 'latest', dirty = historyDirty();
-  const n = allReadings.length, busy = historyState === 'loading', shown = historyState === 'ready' || historyState === 'more';
+  const n = allReadings.length, busy = historyState === 'loading', paging = historyState === 'paging';
+  const shown = historyState === 'ready' || paging, noData = shown && !n && historyPage === 1;
+  const { pages, exact } = historyPages(), first = (historyPage - 1) * historyPageSize + 1, last = first + n - 1;
   for (const b of $('history-views').querySelectorAll('button')) {
     const on = b.dataset.view === historyView; b.classList.toggle('selected', on); b.setAttribute('aria-pressed', String(on));
   }
@@ -427,14 +443,15 @@ function renderHistoryView() {
   const meta = [], orderText = historyOrder === 'asc' ? 'oldest first' : 'newest first';
   if (d && busy) main = 'Loading readings…';
   else if (d && historyState === 'error') main = 'Readings could not be loaded';
+  else if (d && paging) main = `Loading page ${historyTarget.toLocaleString()}…`;
   else if (d && shown) {
-    if (latest) main = !n ? 'No readings in the last 30 days'
-      : `Showing the ${n.toLocaleString()} ${historyOrder === 'asc' ? 'oldest' : 'most recent'} ${n === 1 ? 'reading' : 'readings'}${historyOrder === 'asc' ? ' of the last 30 days' : ''}`;
-    else main = !n && !historyCursor ? 'No readings in this range'
-      : !historyCursor ? `Showing all ${historyPlural(n)}`
-      : historyTotal !== null ? `Showing ${n.toLocaleString()} of ${historyPlural(historyTotal)}` : `Showing the first ${historyPlural(n)}`;
-    if (n) meta.push(orderText);
+    main = noData ? (latest ? 'No readings in the last 30 days' : 'No readings in this range')
+      : !n ? `No readings on page ${historyPage.toLocaleString()}`
+      : pages === 1 && exact ? `Showing all ${historyPlural(n)}`
+      : historyTotal !== null && historyTotal >= last ? `Showing ${first.toLocaleString()}–${last.toLocaleString()} of ${historyPlural(historyTotal)}`
+      : `Showing readings ${first.toLocaleString()}–${last.toLocaleString()}`;
   }
+  if (d && shown && n) { if (latest) meta.push('last 30 days'); meta.push(orderText); }
   if (d && !latest && historyRange && historyState !== 'idle') meta.unshift(historyRangeText(historyRange));
   const strong = el('strong', '', main);
   $('history-count').replaceChildren(...(main ? [strong] : []), ...(main && meta.length ? [el('span', 'history-summary-meta', ` · ${meta.join(' · ')}`)] : []));
@@ -445,7 +462,7 @@ function renderHistoryView() {
   if (d && !never) {
     if (latest) { label = 'Choose a range to export…'; title = 'Exports cover a time range. This switches to Custom range.'; }
     else if (dirty) { label = 'Apply the new dates to export'; disabled = true; }
-    else if (historyTotal === 0 || (shown && !n && !historyCursor)) { label = 'Nothing to export'; disabled = true; }
+    else if (historyTotal === 0 || noData) { label = 'Nothing to export'; disabled = true; }
     else {
       label = historyTotal !== null ? `Export ${historyPlural(historyTotal)} as CSV` : 'Export this range as CSV';
       if (historyRange) title = `Downloads every reading from ${historyRangeText(historyRange)}, oldest first, in CSV files of up to 50,000 readings.`;
@@ -465,59 +482,121 @@ function renderHistoryView() {
       retry.addEventListener('click', () => loadHistory(true, historyLatest, false).catch(e => notice(e.message, 'error')));
       state.append(retry);
     }
-  } else if (shown && !n && !historyCursor) {
+  } else if (noData) {
     state = never ? emptyState(`No readings from ${d.label} yet`, 'This device has never connected. Its readings appear here a few seconds after its first upload.')
       : latest ? emptyState('No readings in the last 30 days', 'History keeps 30 days of readings. Older readings are saved in Archives.')
       : emptyState('No readings in this range', 'Try a wider range such as Last 7 days. Readings older than 30 days are in Archives.');
     if (!never) { const link = el('a', 'history-archives-link', 'Open Archives'); link.href = '#archives'; state.append(link); }
+  } else if (shown && !n) {
+    // A page past the end: readings moved to Archives (or the range changed) after it was counted.
+    state = emptyState(`Page ${historyPage.toLocaleString()} is empty`, 'There are fewer readings than when the pages were counted. Older readings move to Archives automatically.');
+    const back = el('button', 'small history-retry', pages > 1 ? `Go to page ${pages.toLocaleString()}` : 'Go to page 1'); back.type = 'button';
+    back.addEventListener('click', () => goToHistoryPage(pages).catch(e => notice(e.message, 'error')));
+    state.append(back);
   }
   $('history-empty').hidden = !state; $('history-empty').replaceChildren(...(state ? [state] : []));
   $('history-count').parentElement.hidden = !d || (never && !n); // nothing to summarise or export yet
   $('history-table').hidden = !!state || !n;
+  $('history-table').setAttribute('aria-busy', String(paging));
 
-  const more = $('more-history'), page = Number($('history-page-size').value);
-  const remaining = !latest && historyTotal !== null ? historyTotal - n : null;
-  more.hidden = !historyCursor || !shown || !n;
-  more.textContent = historyState === 'more' ? 'Loading…' : `Load ${(remaining > 0 ? Math.min(page, remaining) : page).toLocaleString()} more`;
-  $('history-end').textContent = !shown || !n ? ''
-    : historyCursor ? (remaining !== null ? `${n.toLocaleString()} of ${historyTotal.toLocaleString()} shown` : `${n.toLocaleString()} shown`)
+  renderHistoryPager(shown && n > 0 && (pages > 1 || !exact), pages, exact);
+  $('history-end').textContent = !shown || !n || pages > 1 || !exact ? ''
     : latest ? `All ${historyPlural(n)} from the last 30 days are shown` : `All ${historyPlural(n)} in this range are shown`;
 }
 
-// reset: start a new list; readRange: re-read the range (presets recompute "now"); false keeps the applied range.
-// The second parameter is kept for existing callers; the selected view decides latest versus range.
-async function loadHistory(reset, _latest, readRange = true) {
-  if (reset) {
-    if (readRange && HISTORY_PRESETS[historyView]) fillHistoryPreset(HISTORY_PRESETS[historyView]);
-    historyLatest = historyView === 'latest';
-    allReadings = []; historyCursor = null; $('history-rows').replaceChildren();
-    if (historyLatest) { historyApplied = historyRange = null; historyTotal = null; }
-    else if (readRange || !historyApplied) {
-      const applied = { from: $('from').value, to: $('to').value }, problem = historyRangeProblem(applied.from, applied.to);
-      if (problem) { historyRequest++; historyState = 'error'; historyError = problem; historyRange = null; renderHistoryView(); return; }
-      if (!historyApplied || applied.from !== historyApplied.from || applied.to !== historyApplied.to) historyTotal = null;
-      historyApplied = applied;
-      historyRange = { from: new Date(applied.from).toISOString(), to: new Date(applied.to).toISOString() };
-    }
-    if (!historyLatest && selected) historySelection.countSelection();
+// Page buttons are rebuilt on every render; focus returns to the same control (or the current page).
+function renderHistoryPager(visible, pages, exact) {
+  const pager = $('history-pager'), list = $('history-pages'), prev = $('history-prev'), next = $('history-next'), input = $('history-page-input');
+  pager.hidden = !visible;
+  if (!visible) return;
+  const focused = pager.contains(document.activeElement) ? document.activeElement.dataset.page : undefined;
+  const target = historyTarget, items = pageItems(target, Math.max(pages, target), HISTORY_NARROW.matches ? 0 : 1);
+  if (!exact) items.push('gap'); // more pages follow; their number is not counted yet
+  list.replaceChildren(...items.map(item => {
+    const li = el('li');
+    if (item === 'gap') { li.className = 'history-gap'; li.textContent = '…'; li.setAttribute('aria-hidden', 'true'); return li; }
+    const b = el('button', 'history-page', item.toLocaleString()); b.type = 'button'; b.dataset.page = String(item);
+    b.setAttribute('aria-label', `Page ${item.toLocaleString()}`);
+    if (item === target) b.setAttribute('aria-current', 'page');
+    li.append(b); return li;
+  }));
+  prev.disabled = target <= 1;
+  next.disabled = target >= pages && (exact || !historyHasNext);
+  if (document.activeElement !== input) input.value = String(target);
+  if (exact) input.max = String(pages); else input.removeAttribute('max');
+  $('history-page-total').textContent = exact ? `of ${pages.toLocaleString()}` : '';
+  if (focused) {
+    const again = focused === 'prev' ? prev : focused === 'next' ? next : list.querySelector(`[data-page="${focused}"]`);
+    (again && !again.disabled ? again : list.querySelector('[aria-current="page"]'))?.focus();
   }
-  const request = ++historyRequest, deviceId = selected, pageSize = $('history-page-size').value, order = reset ? $('history-order').value : historyOrder;
+}
+
+// reset: start a new view at page 1; readRange: re-read the range (presets recompute "now"); false keeps the applied range.
+// reset = false opens the next page. The second parameter is kept for existing callers; the selected view decides latest versus range.
+async function loadHistory(reset, _latest, readRange = true) {
+  if (!reset) return goToHistoryPage(historyTarget + 1);
+  if (readRange && HISTORY_PRESETS[historyView]) fillHistoryPreset(HISTORY_PRESETS[historyView]);
+  historyLatest = historyView === 'latest';
+  allReadings = []; historyCursors = new Map(); historyHasNext = false; historyPage = historyTarget = 1;
+  historyPageSize = Number($('history-page-size').value); historyOrder = $('history-order').value;
+  $('history-rows').replaceChildren();
+  if (historyLatest) { historyApplied = historyRange = null; historyTotal = null; }
+  else if (readRange || !historyApplied) {
+    const applied = { from: $('from').value, to: $('to').value }, problem = historyRangeProblem(applied.from, applied.to);
+    if (problem) { historyRequest++; historyWindow = null; historyState = 'error'; historyError = problem; historyRange = null; renderHistoryView(); return; }
+    if (!historyApplied || applied.from !== historyApplied.from || applied.to !== historyApplied.to) historyTotal = null;
+    historyApplied = applied;
+    historyRange = { from: new Date(applied.from).toISOString(), to: new Date(applied.to).toISOString() };
+  }
+  // Latest pins its window from the first page's response (see fetchHistoryPage).
+  historyWindow = historyLatest ? null : historyRange;
+  if (!historyLatest && selected) historySelection.countSelection();
+  return fetchHistoryPage(1, true);
+}
+
+// Opens a page of the current view. Number pages are clamped to the known page count.
+async function goToHistoryPage(page) {
+  if (!current() || !['ready', 'paging'].includes(historyState)) return;
+  const { pages, exact } = historyPages();
+  page = Math.max(1, Math.floor(page));
+  if (exact) page = Math.min(page, pages);
+  if (!Number.isFinite(page) || page === historyTarget) return;
+  return fetchHistoryPage(page, false);
+}
+
+async function fetchHistoryPage(page, reset) {
+  const request = ++historyRequest, deviceId = selected;
   if (!deviceId) { historyState = 'idle'; renderHistoryView(); return; }
-  if (reset) historyOrder = order;
-  historyState = reset ? 'loading' : 'more'; historyError = '';
-  $('more-history').disabled = true; renderHistoryView();
+  historyTarget = page; historyState = reset ? 'loading' : 'paging'; historyError = '';
+  renderHistoryView();
   try {
-    const query = new URLSearchParams({ deviceId, pageSize, order, ...(historyLatest ? { mode: 'latest' } : historyRange) });
-    if (historyCursor) query.set('cursor', historyCursor);
-    const page = await api('/api/history?' + query);
+    const query = new URLSearchParams({ deviceId, pageSize: String(historyPageSize), order: historyOrder, ...(historyWindow ?? { mode: 'latest' }) });
+    const cursor = historyCursors.get(page);
+    if (cursor) query.set('cursor', cursor); else if (page > 1) query.set('offset', String((page - 1) * historyPageSize));
+    const result = await api('/api/history?' + query);
     if (request !== historyRequest || deviceId !== selected) return;
-    historyCursor = page.nextCursor; allReadings.push(...page.readings); historyState = 'ready'; renderHistory(order);
+    if (!historyWindow) { historyWindow = { from: result.from, to: result.to }; countHistoryWindow(); }
+    historyPage = page; historyHasNext = !!result.nextCursor;
+    if (result.nextCursor) historyCursors.set(page + 1, result.nextCursor);
+    allReadings = result.readings; historyState = 'ready'; renderHistory();
+    $('history-table').scrollTop = 0;
   } catch (e) {
-    if (request === historyRequest && deviceId === selected) { historyState = reset ? 'error' : 'ready'; historyError = e.message; }
+    if (request === historyRequest && deviceId === selected) { historyState = reset ? 'error' : 'ready'; historyError = e.message; historyTarget = historyPage; }
     throw e;
   } finally {
-    if (request === historyRequest && deviceId === selected) { $('more-history').disabled = false; renderHistoryView(); }
+    if (request === historyRequest && deviceId === selected) renderHistoryView();
   }
+}
+
+// Latest view: count the pinned window so the pager knows the last page. Range views are
+// counted by historySelection (see onCount below). Without a count the pager steps page by page.
+async function countHistoryWindow() {
+  const request = ++historyCountRequest, deviceId = selected, win = historyWindow;
+  try {
+    const result = await api('/api/archives/selection?' + new URLSearchParams({ deviceId, from: win.from, to: win.to }));
+    if (request !== historyCountRequest || deviceId !== selected || win !== historyWindow || !Number.isSafeInteger(result.count)) return;
+    historyTotal = result.count; renderHistory(); renderHistoryView();
+  } catch { /* keep stepping with Previous/Next */ }
 }
 function selectHistoryView(view, { focus = false } = {}) {
   historyView = view; $('history-range-error').textContent = '';
@@ -526,7 +605,7 @@ function selectHistoryView(view, { focus = false } = {}) {
   if (current()) loadHistory(true).catch(e => notice(e.message, 'error')); else renderHistoryView();
 }
 historySelection.onCount((count, range) => {
-  if (historyApplied && range.from === historyApplied.from && range.to === historyApplied.to) historyTotal = count;
+  if (historyApplied && range.from === historyApplied.from && range.to === historyApplied.to) { historyTotal = count; if (historyView !== 'latest') renderHistory(); }
   renderHistoryView();
 });
 const HISTORY_APPLY_FIRST = 'Apply the new dates first: the export uses the range shown in the table.';
@@ -545,7 +624,21 @@ $('history-form').addEventListener('submit', e => {
   for (const f of $('history-form').querySelectorAll('.field')) f.classList.toggle('invalid', !!problem);
   if (!problem && current()) loadHistory(true).catch(e => notice(e.message, 'error')); else renderHistoryView();
 });
-$('more-history').addEventListener('click', () => loadHistory(false).catch(e => notice(e.message, 'error')));
+$('history-pager').addEventListener('click', e => {
+  const b = e.target.closest('button[data-page]');
+  if (!b || b.disabled) return;
+  const key = b.dataset.page, page = key === 'prev' ? historyTarget - 1 : key === 'next' ? historyTarget + 1 : Number(key);
+  goToHistoryPage(page).catch(e => notice(e.message, 'error'));
+});
+// Typed page numbers: Enter or leaving the field opens the page (clamped to the last page).
+function jumpToHistoryPage() {
+  const input = $('history-page-input'), page = Number(input.value);
+  if (Number.isInteger(page) && page >= 1) goToHistoryPage(page).catch(e => notice(e.message, 'error'));
+  input.value = String(historyTarget); // the page being opened, or unchanged if the entry was not usable
+}
+$('history-jump').addEventListener('submit', e => { e.preventDefault(); jumpToHistoryPage(); });
+$('history-page-input').addEventListener('change', jumpToHistoryPage);
+HISTORY_NARROW.addEventListener('change', () => renderHistoryView());
 for (const control of ['history-page-size', 'history-order']) $(control).addEventListener('change', () => { if (current()) loadHistory(true, historyLatest, false).catch(e => notice(e.message, 'error')); });
 renderHistoryView();
 

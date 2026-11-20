@@ -6,10 +6,10 @@
 <meta name="color-scheme" content="light dark">
 <title>Coop Monitor</title>
 <link rel="stylesheet" href="/style.css?v=7757942ae92f">
-<link rel="stylesheet" href="/history.css?v=313f412b462e">
+<link rel="stylesheet" href="/history.css?v=d30414bc5ea2">
 <link rel="stylesheet" href="/console.css?v=421038c3a77e">
 <link rel="stylesheet" href="/archives.css?v=fa4b9c5a154a">
-<script type="module" src="/app.js?v=691f9df5d81f"></script>
+<script type="module" src="/app.js?v=6183d8aa3359"></script>
 </head>
 <body>
 <header class="app-header">
@@ -191,18 +191,28 @@
   <div id="history-empty" hidden></div>
   <div id="history-table" class="table-wrap scroll-y history-table" hidden>
     <table>
-      <thead><tr><th class="num history-no" scope="col" title="Position in time order among the rows shown (1 = oldest)">No.</th><th scope="col" class="history-time">Time</th><th class="num" scope="col">Gas response<span class="th-unit">mV</span></th><th class="num" scope="col" title="Gas response divided by the calibration baseline">Ratio<span class="th-unit">× baseline</span></th><th class="num" scope="col">Temperature<span class="th-unit">°C</span></th><th class="num" scope="col">Humidity<span class="th-unit">%</span></th><th class="num" scope="col">Pressure<span class="th-unit">hPa</span></th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th class="num history-no" scope="col" title="Position in time order across all pages (1 = oldest)">No.</th><th scope="col" class="history-time">Time</th><th class="num" scope="col">Gas response<span class="th-unit">mV</span></th><th class="num" scope="col" title="Gas response divided by the calibration baseline">Ratio<span class="th-unit">× baseline</span></th><th class="num" scope="col">Temperature<span class="th-unit">°C</span></th><th class="num" scope="col">Humidity<span class="th-unit">%</span></th><th class="num" scope="col">Pressure<span class="th-unit">hPa</span></th><th scope="col">Status</th></tr></thead>
       <tbody id="history-rows"></tbody>
     </table>
   </div>
   <div class="history-more">
-    <button id="more-history" hidden>Load more</button>
+    <nav id="history-pager" class="history-pager" aria-label="History pages" hidden>
+      <button id="history-prev" type="button" class="small history-step" data-page="prev" aria-label="Previous page"><span aria-hidden="true">‹</span><span class="history-step-text" aria-hidden="true">Previous</span></button>
+      <ol id="history-pages" class="history-pages"></ol>
+      <button id="history-next" type="button" class="small history-step" data-page="next" aria-label="Next page"><span class="history-step-text" aria-hidden="true">Next</span><span aria-hidden="true">›</span></button>
+      <form id="history-jump" class="history-jump" novalidate>
+        <label for="history-page-input">Page</label>
+        <input id="history-page-input" type="number" min="1" step="1" inputmode="numeric" enterkeyhint="go">
+        <span id="history-page-total"></span>
+      </form>
+    </nav>
     <span id="history-end" class="small"></span>
   </div>
   <details class="disclosure">
     <summary>About times and ranges</summary>
     <ul class="history-notes small">
       <li>History keeps the last 30 days of readings. Older readings move to <a href="#archives">Archives</a> automatically.</li>
+      <li>The table shows one page at a time; Rows per page sets its size. No. counts across all pages, with 1 as the oldest reading.</li>
       <li>Times are shown in your browser’s time zone, with dates as DD/MM/YYYY.</li>
       <li><abbr class="history-est" title="Estimated time">est.</abbr> marks an estimated time: the monitor’s clock had not been set yet (for example just after a restart), so the time was worked out from how long it had been running. It may be off by a few seconds.</li>
       <li>A custom range can cover up to 31 days. CSV exports contain every reading in the range, oldest first, split into files of up to 50,000 readings.</li>
