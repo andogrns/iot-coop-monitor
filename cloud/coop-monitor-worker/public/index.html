@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>Coop Monitor</title>
-<link rel="stylesheet" href="/style.css?v=7757942ae92f">
+<link rel="stylesheet" href="/style.css?v=8aef06a87ea5">
 <link rel="stylesheet" href="/history.css?v=d30414bc5ea2">
 <link rel="stylesheet" href="/console.css?v=421038c3a77e">
 <link rel="stylesheet" href="/archives.css?v=fa4b9c5a154a">
-<script type="module" src="/app.js?v=6183d8aa3359"></script>
+<script type="module" src="/app.js?v=145386451fe7"></script>
 </head>
 <body>
 <header class="app-header">
@@ -91,6 +91,7 @@
     <span class="legend-item" data-legend="threshold"><span class="legend-threshold"></span>Warning threshold</span>
     <span class="legend-item" data-legend="warning"><span class="legend-warning"></span>Gas warning</span>
   </div>
+  <div id="trend-thi" class="thi-summary" role="group" aria-label="Time in each THI band" hidden></div>
   <p id="trend-note" class="small trend-note" hidden></p>
   <p id="trend-status" class="small" role="status" aria-live="polite">Select a device to load trends.</p>
   <div class="trend-inspector">
@@ -191,7 +192,7 @@
   <div id="history-empty" hidden></div>
   <div id="history-table" class="table-wrap scroll-y history-table" hidden>
     <table>
-      <thead><tr><th class="num history-no" scope="col" title="Position in time order across all pages (1 = oldest)">No.</th><th scope="col" class="history-time">Time</th><th class="num" scope="col">Gas response<span class="th-unit">mV</span></th><th class="num" scope="col" title="Gas response divided by the calibration baseline">Ratio<span class="th-unit">× baseline</span></th><th class="num" scope="col">Temperature<span class="th-unit">°C</span></th><th class="num" scope="col">Humidity<span class="th-unit">%</span></th><th class="num" scope="col">Pressure<span class="th-unit">hPa</span></th><th scope="col">Status</th></tr></thead>
+      <thead><tr><th class="num history-no" scope="col" title="Position in time order across all pages (1 = oldest)">No.</th><th scope="col" class="history-time">Time</th><th class="num" scope="col">Gas response<span class="th-unit">mV</span></th><th class="num" scope="col" title="Gas response divided by the calibration baseline">Ratio<span class="th-unit">× baseline</span></th><th class="num" scope="col">Temperature<span class="th-unit">°C</span></th><th class="num" scope="col">Humidity<span class="th-unit">%</span></th><th class="num" scope="col" title="Temperature-humidity index, worked out from temperature and humidity (not stored or exported)">THI<span class="th-unit">index</span></th><th class="num" scope="col">Pressure<span class="th-unit">hPa</span></th><th scope="col">Status</th></tr></thead>
       <tbody id="history-rows"></tbody>
     </table>
   </div>
@@ -217,6 +218,7 @@
       <li><abbr class="history-est" title="Estimated time">est.</abbr> marks an estimated time: the monitor’s clock had not been set yet (for example just after a restart), so the time was worked out from how long it had been running. It may be off by a few seconds.</li>
       <li>A custom range can cover up to 31 days. CSV exports contain every reading in the range, oldest first, split into files of up to 50,000 readings.</li>
       <li>Gas response is the MQ-135 sensor’s relative response in millivolts, not an ammonia (ppm) measurement. Ratio compares it with the calibration baseline.</li>
+      <li>THI (temperature-humidity index) is worked out in your browser from the temperature and humidity of each reading, with the NRC (1971) formula. Heat-stress bands for laying hens (Kim et al., 2024): Comfort below 70, Alert 70–75, Danger 75–81, Emergency 81 and above. It is not stored, and CSV exports do not include it.</li>
     </ul>
   </details>
 </article>

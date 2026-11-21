@@ -1,5 +1,13 @@
 # Backend verification
 
+## THI on the dashboard — 21 November 2026, deployed as `1bc3efed`
+
+Dashboard-only change: THI is worked out in the browser (`public/thi.js`); backend, API, D1 and CSV export are unchanged.
+- **Tests:** 150/150 Node tests, including 6 in the new `scripts/thi.test.mjs`.
+- **Rollout:** Worker `1bc3efed-c3d5-4b6c-b07e-cbe2d7f644bf`; 20 live asset hashes match; anonymous private routes return 401.
+
+The authenticated live dashboard was not opened by the agent. Details: root [verification](../../VERIFICATION.md).
+
 ## History numbered pages — 20 November 2026, deployed as `c10a2a0f`
 
 Entry-paged `/api/history` accepts an optional `offset` without a cursor (see API.md). A seek picks a pivot block from minute-block sizes, counts the entries beyond it exactly (whole interior blocks by `json_array_length`, edge blocks entry by entry) and skips only the remainder with `OFFSET`. Results equal cursor paging. Evidence:

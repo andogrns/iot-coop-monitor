@@ -6,10 +6,24 @@ Updated **18 November 2026 (Asia/Jakarta)** from local source, Git state, a publ
 
 - **Firmware source:** `cloudflare-1.2.0` (commit `14027c0`, 15 Nov): microSD backup and remote SD commands. Last recorded install: USB upload on 15 Nov, checked over Serial. Not read since.
 - **Device evidence gap:** the backend's newest coop reading is 10 Nov (the 15 Nov bench boots were deleted at the user's request). Whether the device runs 1.2.0 and uploads now is unverified.
-- **Worker:** live `c10a2a0f` (20 Nov): History numbered pages (see the next entry). It builds on `84bbab7f` (18 Nov, Settings gas-warning alerts) and the Overview side-by-side and all-in-one views (`3af342f6`, same day). After deploy: `/health` ok; the checked live assets match the local files. The 20 Nov change is not committed to Git.
-- **Git:** local `main` holds the 18 Nov Worker commit and the docs-refresh commit, not pushed. `origin/main` was `221dd07` (15 Nov) at the last fetch. The Week 1 notebook, `build_nb.py` and the 17 Nov handoff are still uncommitted.
+- **Worker:** live `1bc3efed` (21 Nov): THI on the dashboard (see the THI entry). It builds on `c10a2a0f` (20 Nov, History numbered pages), `84bbab7f` (18 Nov, Settings gas-warning alerts) and the Overview side-by-side and all-in-one views (`3af342f6`, same day). After deploy: `/health` ok; all 20 live assets match the local files; anonymous private routes return 401.
+- **Git:** the 20 Nov History change is commit `01fb53a`; the 21 Nov THI change is the commit after it, pushed to `origin/main` the same day. Still uncommitted on 21 Nov: the Week 1 notebook, `build_nb.py`, the 17 and 19 Nov handoffs, and some doc notes from other sessions.
 - **OLED:** no longer used (user decision, 18 November 2026). The notes below stay as project history. The firmware source keeps the disabled OLED code because no re-flash is planned; remove it at the next flash.
 - **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded).
+- **21 November:** THI (temperature-humidity index) added to the dashboard and deployed as `1bc3efed` (see the next entry).
+
+## THI on the dashboard (21 November 2026, deployed as `1bc3efed`)
+
+The user (in Indonesian) asked to add the Week 1 notebook's THI calculation to the website so its development over time is visible. **Implemented, tested and deployed** the same day, after the user reviewed the local preview and asked to deploy; committed and pushed to `origin/main`. Backend, API, D1, CSV export and firmware are unchanged: THI is worked out in the browser.
+
+- **Formula and bands:** the same as the notebook (`Week 1 Readings/Plots/build_nb.py`): NRC (1971) °F form from the AHT20 temperature and humidity; laying-hen bands from Kim et al. (2024): Comfort < 70, Alert 70–75, Danger 75–81 (75 as the cautious start, as in the notebook), Emergency ≥ 81. Source: `public/thi.js`.
+- **Overview:** a fifth tile "THI" with the band badge and the loaded-window range. THI is a fifth trend metric: Single view with shaded bands, band names in a right margin on wide charts, and below the chart the time spent in each band over the chosen 1/6/12/24 h window plus a note on formula and source; Side by side adds a full-width THI panel; All in one adds a THI line (`--series-5`, magenta, palette validated with 5 slots).
+- **History:** a THI column after Humidity (band in the cell tooltip) and a note that THI is not stored or exported.
+- **Difference from the notebook:** the notebook used five-minute medians of OK/GAS_WARNING rows; the dashboard computes THI per reading whenever temperature and humidity are both valid.
+- **Layout change:** tiles are 1.35fr + 4 columns on wide screens; at ≤ 1000 px the gas tile spans the full width above a 2 × 2 grid.
+- **Evidence:** 150/150 Worker tests (6 new in `scripts/thi.test.mjs`); the JS formula equals the notebook's Python function at 943 points (max difference 0); headless Chrome on the synthetic preview (details in VERIFICATION.md).
+- **Deployed** as Worker `1bc3efed-c3d5-4b6c-b07e-cbe2d7f644bf` (assets only: `index.html`, `app.js`, `trends.js`, `style.css` and the new `thi.js`); see DEPLOYMENT.md.
+- **Open:** the agent did not sign in to the live dashboard, so THI has only been seen with synthetic data; real readings, Safari/Firefox and a real phone not checked. Optional follow-ups not done: THI in CSV export or alert messages.
 
 ## History numbered pages (20 November 2026, deployed as `c10a2a0f`)
 
@@ -238,7 +252,7 @@ See [stack architecture](docs/STACK_ARCHITECTURE.md), [project handoff](docs/PRO
 
 ## Implemented dashboard behavior
 
-Signal provides 1h/6h/12h/24h trends. Full loads page through the existing history API; incremental refresh overlaps two minutes. Very late arrivals need **Refresh trend**. Lines break at missing measurements, boot changes and time gaps.
+Signal provides 1h/6h/12h/24h trends; since 21 November 2026 (deployed as `1bc3efed`) the readings include a browser-computed THI with heat-stress bands. Full loads page through the existing history API; incremental refresh overlaps two minutes. Very late arrivals need **Refresh trend**. Lines break at missing measurements, boot changes and time gaps.
 
 History defaults to 100 recent entries, newest first, shown as numbered pages (20 November 2026; previously "Load more"). Page sizes: 50/100/250/500/1000, with both time orders. From/To totals count the entire inclusive selection independently of loaded rows; editing dates does not load the table until submission. Table dates are DD/MM/YYYY in the browser timezone.
 

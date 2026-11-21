@@ -72,8 +72,10 @@
   --info: #2f5bc4;    --info-bg: #e4ebfa;
   --danger-solid: #b3261e; --on-danger: #ffffff;
   /* Chart series (Overview "Side by side" / "All in one"), validated categorical order:
-     gas, temperature, humidity, pressure. Pressure is also dashed (orange/yellow are close for CVD). */
-  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+     gas, temperature, humidity, pressure, THI. Pressure is also dashed (orange/yellow are close for CVD). */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100; --series-5: #e87ba4;
+  /* THI heat-stress bands (status colours, the same in both themes; always shown with their names). */
+  --thi-comfort: #0ca30c; --thi-alert: #fab219; --thi-danger: #ec835a; --thi-emergency: #d03b3b; --thi-band-opacity: .11;
 
   --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
   --space-5: 20px; --space-6: 24px; --space-8: 32px;
@@ -105,7 +107,8 @@
     --muted: #a8b9cf;   --muted-bg: #26344a;
     --info: #9abaff;    --info-bg: #263b5e;
     --danger-solid: #ff8f8a; --on-danger: #2b0b0c;
-    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500; --series-5: #d55181;
+    --thi-band-opacity: .17;
     --shadow: 0 10px 30px rgba(0, 0, 0, .45);
   }
 }
@@ -330,7 +333,7 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
    Overview tab
    ========================================================================== */
 #overview-empty { margin-bottom: var(--space-5); }
-.metrics { display: grid; grid-template-columns: 1.35fr repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
+.metrics { display: grid; grid-template-columns: 1.35fr repeat(4, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-5); }
 .metric-tile {
   display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; gap: 0;
   min-width: 0; padding: var(--space-4) var(--space-5); text-align: left; font-weight: 400;
@@ -379,6 +382,7 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
 .series-ahtTemperatureC { --series: var(--series-2); }
 .series-humidityPct { --series: var(--series-3); }
 .series-pressureHpa { --series: var(--series-4); }
+.series-thi { --series: var(--series-5); }
 .trend-svg .chart-line.series { stroke: var(--series); }
 .trend-svg .chart-dot.series, .trend-svg .chart-focus.series { fill: var(--series); }
 #trend-svg .chart-line.series-pressureHpa, .series-line.series-pressureHpa { stroke-dasharray: 6 3; }
@@ -396,12 +400,34 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
 .series-toggle.off .series-name { text-decoration: line-through; }
 .trend-panels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4) var(--space-5); }
 .trend-panel { margin: 0; min-width: 0; }
+.trend-panel:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .panel-caption { display: flex; align-items: center; gap: 6px; min-height: 22px; font-size: 13px; }
 .panel-name { font-weight: 600; color: var(--ink); }
 .panel-unit { color: var(--sub); font-size: 12px; }
 .panel-value { margin-left: auto; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .panel-svg { width: 100%; height: 180px; display: block; touch-action: pan-y; }
 .trend-note { margin: var(--space-2) 0 0; }
+/* THI: heat-stress bands behind the line, and the time spent in each band below the chart. */
+.thi-comfort { --band: var(--thi-comfort); }
+.thi-alert { --band: var(--thi-alert); }
+.thi-danger { --band: var(--thi-danger); }
+.thi-emergency { --band: var(--thi-emergency); }
+.trend-svg .thi-band { fill: var(--band); opacity: var(--thi-band-opacity); }
+.trend-svg .thi-edge { stroke: var(--line-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+.trend-svg .thi-key { fill: var(--band); }
+.trend-svg text.thi-band-label { fill: var(--ink); font-weight: 600; }
+.trend-svg text.thi-band-range { fill: var(--sub); }
+.thi-summary { margin-top: var(--space-2); }
+.thi-summary-title { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--ink); }
+.thi-summary-list { display: flex; flex-wrap: wrap; gap: 6px var(--space-4); margin: 0; padding: 0; list-style: none; font-size: 12px; }
+.thi-summary-item { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.thi-summary-item.empty { color: var(--sub); }
+.thi-swatch { flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--band); }
+.thi-summary-name { font-weight: 600; color: var(--ink); }
+.thi-summary-item.empty .thi-summary-name { color: var(--sub); font-weight: 500; }
+.thi-summary-range { color: var(--sub); }
+.thi-summary-value { color: var(--ink); }
+.thi-summary-item.empty .thi-summary-value { color: var(--sub); }
 .chart-tooltip {
   position: absolute; z-index: 2; top: 0; left: 0; pointer-events: none;
   transform: translate(var(--tx, 0px), var(--ty, 0px));
@@ -451,6 +477,7 @@ main, .app-footer { max-width: 1280px; margin: 0 auto; padding: var(--space-6); 
 }
 @media (max-width: 1000px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-tile[data-metric=mqMv] { grid-column: 1 / -1; }
 }
 @media (max-width: 860px) {
   .app-header { flex-wrap: wrap; padding: 8px 20px 0; }

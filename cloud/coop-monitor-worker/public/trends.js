@@ -1,11 +1,26 @@
 import { describeStatus, formatDateTime, formatNumber, formatTime, hasStatus, niceTicks } from './format.js?v=0242141ec619';
+import { THI_BANDS, THI_EDGES, bandRange, bandTimes, readingThi, thiBand } from './thi.js?v=12dccfd4748f';
 export const TREND_HOURS = [1, 6, 12, 24];
 export const METRICS = [
   { key: 'mqMv', label: 'Gas response', unit: 'mV', description: 'Divided ADC input', precision: 0 },
   { key: 'ahtTemperatureC', label: 'Temperature', unit: '°C', description: 'AHT20 sensor', precision: 1 },
   { key: 'humidityPct', label: 'Humidity', unit: '%', description: 'Relative humidity', precision: 1 },
   { key: 'pressureHpa', label: 'Pressure', unit: 'hPa', description: 'BMP280 sensor', precision: 1 },
+  // Derived, not measured: worked out in the browser from temperature and humidity (thi.js). No unit (an index).
+  { key: 'thi', label: 'Heat stress (THI)', name: 'THI', tileLabel: 'THI', unit: '', description: 'From temperature and humidity', precision: 1, derive: readingThi },
 ];
+// A metric's value in a reading, measured or derived (undefined without a reading).
+// The metric's name inside a sentence ("Show humidity on the chart").
+export const nameOf = m => m.name ?? m.label.toLowerCase();
+export const metricValue = (m, r) => !r ? undefined : m.derive ? m.derive(r) : r[m.key];
+// Value with its unit; the THI has none.
+export const withUnit = (m, text) => m.unit ? `${text} ${m.unit}` : text;
+// Trend readings carry their derived values, so every chart reads them like a measurement.
+function withDerived(r) {
+  const out = { ...r };
+  for (const m of METRICS) if (m.derive) out[m.key] = m.derive(r);
+  return out;
+}
 // Use the same server-anchored timeline as the history endpoint's range filter.
 export const readingTime = r => Date.parse(r.estimatedAt ?? r.sampledAt);
 const readingId = r => `${r.deviceId}/${r.bootId}/${r.seq}`;
@@ -59,7 +74,7 @@ export class TrendData {
         if(cursor)query.set('cursor',cursor);
         const page=await this.api('/api/history?'+query,{signal:controller.signal});
         if(generation!==this.generation)return null;
-        incoming.push(...page.readings);cursor=page.nextCursor;pages++;
+        incoming.push(...page.readings.map(withDerived));cursor=page.nextCursor;pages++;
         if(incoming.length>100000||pages>120||cursor&&cursors.has(cursor))throw Error('Trend range is too large. Choose a shorter range or use History.');
         if(cursor)cursors.add(cursor);
         onProgress(pages);
@@ -74,25 +89,46 @@ export class TrendData {
 // Views: one reading at a time, every reading on its own chart side by side, or all on one chart.
 export const CHART_VIEWS = ['single', 'split', 'combined'];
 // Smallest y-span per metric, so normal sensor noise is not stretched to full chart height.
-const MIN_SPAN = { mqMv: 10, ahtTemperatureC: 2, humidityPct: 5, pressureHpa: 2 };
+const MIN_SPAN = { mqMv: 10, ahtTemperatureC: 2, humidityPct: 5, pressureHpa: 2, thi: 3 };
 const SUBTITLE = {
   mqMv: 'Relative MQ-135 gas response in mV (not ammonia ppm)',
   ahtTemperatureC: 'Air temperature in °C (AHT20)',
   humidityPct: 'Relative humidity in % (AHT20)',
   pressureHpa: 'Air pressure in hPa (BMP280)',
+  thi: 'Temperature-humidity index from the AHT20 temperature and humidity, with the laying-hen heat-stress bands',
 };
-const SHORT = { mqMv: 'Gas', ahtTemperatureC: 'Temp.', humidityPct: 'Humidity', pressureHpa: 'Pressure' };
+const SHORT = { mqMv: 'Gas', ahtTemperatureC: 'Temp.', humidityPct: 'Humidity', pressureHpa: 'Pressure', thi: 'THI' };
 const VIEW_TEXT = {
   split: ['All readings, side by side', 'Each reading on its own scale, on one shared time axis. Gas response is relative mV, not ammonia ppm.'],
   combined: ['All readings on one chart', 'Each line is scaled to its own range, so shapes and timing can be compared. Gas response is relative mV, not ammonia ppm.'],
 };
 const VIEW_NOTE = {
-  split: 'Each chart has its own scale; the time axis is the same for all four. Point at any chart, or use the slider, to read all four at the same moment.',
+  split: 'Each chart has its own scale; the time axis is the same for all of them. Point at any chart, or use the slider, to read every value at the same moment. THI is worked out from temperature and humidity.',
   combined: 'Each line runs from its own lowest value (Low) to its highest (High) in this window, listed on its button; very steady readings stay near the middle instead of being stretched. Heights cannot be compared between readings. Point at the chart, or use the slider, for the actual values.',
 };
 const windowText = hours => hours === 1 ? 'the last hour' : `the last ${hours} hours`;
+// THI note under the single chart: where the formula and bands come from.
+const THI_NOTE = 'THI = T°F − (0.55 − 0.0055 × RH) × (T°F − 58), the NRC (1971) formula, from the AHT20 temperature and humidity. '
+  + 'Bands for laying hens from Kim et al. (2024): Comfort below 70, Alert 70–75, Danger from 75 (the paper lists 76–81; 75 is the cautious start, as in the Week 1 analysis), Emergency from 81. '
+  + 'It is a heat-stress index for the birds, not a gas reading.';
+export function formatDuration(ms) {
+  const minutes = Math.round(ms / 60000), h = Math.floor(minutes / 60), m = minutes % 60;
+  return h ? `${h} h${m ? ` ${m} min` : ''}` : ms > 0 && !minutes ? '< 1 min' : `${minutes} min`;
+}
+// Percent of a total, never shown as 0% when there is some.
+export function sharePct(part, total) {
+  if (!total || !part) return '0%';
+  const pct = part / total * 100;
+  return pct < 0.5 ? '< 1%' : pct > 99.5 && part < total ? '> 99%' : `${Math.round(pct)}%`;
+}
+// Data range widened to take in each THI band edge (70, 75, 81) lying within `reach` of it.
+export function fitThiEdges(lo, hi, reach = 3) {
+  for (const e of THI_EDGES) if (e >= lo - reach && e <= hi + reach) { lo = Math.min(lo, e); hi = Math.max(hi, e); }
+  return { lo, hi };
+}
 const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 const PREFS_KEY = 'coop-monitor.trend-view';
+const THI_LABEL_MARGIN = 82;  // right margin (px) for the THI band names on wide charts
 function readPrefs() { try { const v = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null'); return v && typeof v === 'object' ? v : {}; } catch { return {}; } }
 function writePrefs(value) { try { localStorage.setItem(PREFS_KEY, JSON.stringify(value)); } catch { /* storage blocked: the choice lasts for this page only */ } }
 
@@ -132,7 +168,9 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
   const el=(tag,attrs={},text)=>{const n=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,v);if(text!==undefined)n.textContent=text;return n;};
   const html=(tag,className,text)=>{const n=document.createElement(tag);if(className)n.className=className;if(text!==undefined)n.textContent=text;return n;};
   const fmt=(m,v)=>formatNumber(v,{digits:m.precision,grouping:false});
-  const value=v=>fmt(metric,v);
+  const shown1=(m,v)=>Number.isFinite(v)?withUnit(m,fmt(m,v)):'—';
+  // THI values name their band: "76.4 · Danger".
+  const thiText=v=>{const b=thiBand(v);return b?`${fmt(METRICS.find(m=>m.key==='thi'),v)} · ${b.label}`:'—';};
   const shownMetrics=()=>mode==='single'?[metric]:mode==='split'?METRICS:METRICS.filter(m=>!hiddenSeries.has(m.key));
   const tooltip=()=>$('trend-tooltip');
   function hideTooltip(){tooltip().hidden=true;}
@@ -142,12 +180,12 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     badge.title=r.status??'';
     const time=html('div','tip-time',formatDateTime(readingTime(r))+(r.sampledAt?'':' (estimated)'));
     let py;
-    if(scales.kind==='single'){tip.classList.remove('multi');tip.replaceChildren(time,html('div','tip-value',`${value(r[metric.key])} ${metric.unit}`),badge);py=scales.y(r[metric.key]);}
+    if(scales.kind==='single'){tip.classList.remove('multi');tip.replaceChildren(time,html('div','tip-value',metric.key==='thi'?thiText(r.thi):shown1(metric,r[metric.key])),badge);py=scales.y(r[metric.key]);}
     else {
       const rows=[];py=Infinity;
       for(const line of scales.lines){
         const v=r[line.m.key],row=html('div','tip-row'),swatch=html('span',`series-swatch series series-${line.m.key}`);swatch.setAttribute('aria-hidden','true');
-        row.append(swatch,html('span','tip-name',line.m.label),html('span','tip-val',Number.isFinite(v)?`${fmt(line.m,v)} ${line.m.unit}`:'—'));rows.push(row);
+        row.append(swatch,html('span','tip-name',line.m.label),html('span','tip-val',shown1(line.m,v)));rows.push(row);
         if(Number.isFinite(v))py=Math.min(py,line.y(v));
       }
       tip.classList.add('multi');tip.replaceChildren(time,...rows,badge);
@@ -159,8 +197,8 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     tip.style.setProperty('--tx',`${Math.round(left)}px`);tip.style.setProperty('--ty',`${Math.round(top)}px`);
   }
   function detailText(r){
-    const values=mode==='single'?`${value(r[metric.key])} ${metric.unit}`
-      :shownMetrics().map(m=>`${SHORT[m.key]} ${Number.isFinite(r[m.key])?`${fmt(m,r[m.key])} ${m.unit}`:'—'}`).join(' · ');
+    const values=mode==='single'?(metric.key==='thi'?thiText(r.thi):shown1(metric,r[metric.key]))
+      :shownMetrics().map(m=>`${SHORT[m.key]} ${shown1(m,r[m.key])}`).join(' · ');
     return `${formatDateTime(readingTime(r))} · ${values} · ${describeStatus(r.status).label}${r.sampledAt?'':' · estimated time'}`;
   }
   function marker(svg,x,top,bottom,dots){
@@ -178,7 +216,7 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     if(scales.kind==='single')marker($('trend-svg'),scales.x(t),scales.top,scales.bottom,[[scales.y(r[metric.key]),'chart-focus']]);
     else if(scales.kind==='combined')marker($('trend-svg'),scales.x(t),scales.top,scales.bottom,scales.lines.filter(l=>Number.isFinite(r[l.m.key])).map(l=>[l.y(r[l.m.key]),`chart-focus series series-${l.m.key}`]));
     else for(const p of scales.panels){
-      const v=r[p.m.key];p.value.textContent=Number.isFinite(v)?`${fmt(p.m,v)} ${p.m.unit}`:'—';
+      const v=r[p.m.key];p.value.textContent=p.m.key==='thi'?thiText(v):shown1(p.m,v);
       if(p.y)marker(p.svg,p.x(t),p.top,p.bottom,Number.isFinite(v)?[[p.y(v),`chart-focus series series-${p.m.key}`]]:[]);
     }
     if(withTooltip)showTooltip(r);
@@ -229,18 +267,50 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
       else svg.append(el('polyline',{points:reduced.map(r=>`${x(readingTime(r)).toFixed(2)},${y(r[key]).toFixed(2)}`).join(' '),class:cls}));
     }
   }
+  // THI heat-stress bands behind the line, with their edges. On wide charts each band is named in a right margin
+  // (beside a key strip), so the names never cover the latest values; narrow charts rely on the summary below.
+  const thiRight=width=>width>=480?THI_LABEL_MARGIN:12;
+  function thiBands(svg,axis,y,left,right,width){
+    const named=right>=THI_LABEL_MARGIN;
+    for(const b of THI_BANDS){
+      const hi=Math.min(b.max,axis.max),lo=Math.max(b.min,axis.min);if(hi<=lo)continue;
+      const y1=y(hi),y2=y(lo),h=y2-y1,mid=(y1+y2)/2,lx=width-right+10;
+      svg.append(el('rect',{x:left,y:y1,width:Math.max(0,width-left-right),height:h,class:`thi-band thi-${b.key}`}));
+      if(!named)continue;
+      svg.append(el('rect',{x:width-right+2,y:y1+1,width:3,height:Math.max(0,h-2),class:`thi-key thi-${b.key}`}));
+      if(h>=30)svg.append(el('text',{x:lx,y:mid-2,class:'thi-band-label'},b.label),el('text',{x:lx,y:mid+11,class:'thi-band-range'},bandRange(b)));
+      else if(h>=13)svg.append(el('text',{x:lx,y:mid+4,class:'thi-band-label'},b.label));
+    }
+    for(const e of THI_EDGES)if(e>axis.min&&e<axis.max){const ey=y(e);svg.append(el('line',{x1:left,x2:width-right,y1:ey,y2:ey,class:'thi-edge'}));}
+  }
+  // Time in each THI band over the loaded window (below the single THI chart).
+  function renderThiSummary(readings){
+    const root=$('trend-thi');
+    const times=bandTimes(readings,readingTime,r=>r.thi,gapFor());
+    if(!times.readings){root.replaceChildren(html('p','small',busy?'':'No THI yet: it needs both temperature and humidity readings.'));return;}
+    const head=html('p','thi-summary-title',times.by==='time'?`Time in each band, ${windowText(hours)}`:`Share of readings in each band, ${windowText(hours)}`);
+    const list=html('ul','thi-summary-list');
+    for(const b of THI_BANDS){
+      const v=times.values[b.key],item=html('li',`thi-summary-item${v?'':' empty'}`),swatch=html('span',`thi-swatch thi-${b.key}`);swatch.setAttribute('aria-hidden','true');
+      item.append(swatch,html('span','thi-summary-name',`${b.label}`),html('span','thi-summary-range',bandRange(b)),
+        html('span','thi-summary-value',times.by==='time'?`${formatDuration(v)} · ${sharePct(v,times.total)}`:sharePct(v,times.total)));
+      list.append(item);
+    }
+    root.replaceChildren(head,list);
+  }
   // ---- view: one reading
   function drawSingle(readings,from,to){
     const svg=$('trend-svg'),f=frame(svg);if(!f)return false;
-    const {width,height}=f,gas=metric.key==='mqMv';
-    svg.setAttribute('aria-label',`${metric.label} in ${metric.unit}, ${windowText(hours)}. Gaps are not connected.`);
+    const {width,height}=f,gas=metric.key==='mqMv',isThi=metric.key==='thi';
+    svg.setAttribute('aria-label',`${metric.label}${metric.unit?` in ${metric.unit}`:''}, ${windowText(hours)}. Gaps are not connected.${isThi?' Shaded bands: Comfort, Alert, Danger, Emergency.':''}`);
     if(!valid.length)return true;
-    const range=valueRange(valid,metric.key,MIN_SPAN[metric.key]??1),threshold=gas?thresholdFor(readings):null,fit=fitThreshold(range.lo,range.hi,threshold);
+    const range=valueRange(valid,metric.key,MIN_SPAN[metric.key]??1),threshold=gas?thresholdFor(readings):null,fit=isThi?fitThiEdges(range.lo,range.hi):fitThreshold(range.lo,range.hi,threshold);
     const axis=yAxis(fit.lo,fit.hi,height<280?4:5);
-    const left=Math.max(34,axis.widest*7+14),right=12,top=18,bottom=height-26;
+    const left=Math.max(34,axis.widest*7+14),right=isThi?thiRight(width):12,top=18,bottom=height-26;
     const x=t=>left+(t-from)/(to-from)*(width-left-right),y=v=>top+(axis.max-v)/(axis.max-axis.min)*(bottom-top);
     scales={kind:'single',x,y,left,right,top,bottom,width,from,to};
-    svg.append(el('title',{},`${metric.label}: ${valid.length.toLocaleString()} readings in ${windowText(hours)}`),el('text',{x:4,y:11},metric.unit));
+    svg.append(el('title',{},`${metric.label}: ${valid.length.toLocaleString()} readings in ${windowText(hours)}`),el('text',{x:4,y:11},metric.unit||SHORT[metric.key]));
+    if(isThi)thiBands(svg,axis,y,left,right,width);
     grid(svg,axis.ticks,axis.label,y,left,right,width);
     timeAxis(svg,x,from,to,left,right,width,height);
     const gapMs=gapFor();
@@ -254,7 +324,7 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     panels=METRICS.map(m=>{
       const fig=html('figure','trend-panel'),cap=html('figcaption','panel-caption'),swatch=html('span',`series-swatch series series-${m.key}`);swatch.setAttribute('aria-hidden','true');
       const value=html('span','panel-value','—');
-      cap.append(swatch,html('span','panel-name',m.label),html('span','panel-unit',m.key==='mqMv'?'mV, relative':m.unit),value);
+      cap.append(swatch,html('span','panel-name',m.label),html('span','panel-unit',m.key==='mqMv'?'mV, relative':m.key==='thi'?'index':m.unit),value);
       const svg=el('svg',{class:'trend-svg panel-svg',role:'img'});
       fig.append(cap,svg);$('trend-panels').append(fig);
       return {m,svg,value};
@@ -264,22 +334,25 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     const gapMs=gapFor(),threshold=thresholdFor(readings),plans=[];
     for(const p of panels){
       const f=frame(p.svg);if(!f)return false;
-      p.svg.setAttribute('aria-label',`${p.m.label} in ${p.m.unit}, ${windowText(hours)}. Gaps are not connected.`);
+      p.svg.setAttribute('aria-label',`${p.m.label}${p.m.unit?` in ${p.m.unit}`:''}, ${windowText(hours)}. Gaps are not connected.`);
       const range=valid.length?valueRange(readings,p.m.key,MIN_SPAN[p.m.key]??1):null;
-      const fit=!range?null:p.m.key==='mqMv'?fitThreshold(range.lo,range.hi,threshold):{lo:range.lo,hi:range.hi,shown:false};
+      const fit=!range?null:p.m.key==='mqMv'?fitThreshold(range.lo,range.hi,threshold):p.m.key==='thi'?fitThiEdges(range.lo,range.hi):{lo:range.lo,hi:range.hi,shown:false};
       plans.push({...p,...f,fit,axis:fit?yAxis(fit.lo,fit.hi,f.height<170?3:4):null});
     }
     // One left margin for every chart, so their time axes line up.
     const left=Math.max(34,...plans.map(p=>p.axis?p.axis.widest*7+14:0)),right=12,top=18,out=[];
     for(const p of plans){
-      const bottom=p.height-24,x=t=>left+(t-from)/(to-from)*(p.width-left-right),entry={m:p.m,svg:p.svg,value:p.value,x,y:null,top,bottom};
+      // The THI panel may keep a right margin for its band names; hover uses each panel's own margins.
+      const pr=p.m.key==='thi'?thiRight(p.width):right;
+      const bottom=p.height-24,x=t=>left+(t-from)/(to-from)*(p.width-left-pr),entry={m:p.m,svg:p.svg,value:p.value,x,y:null,top,bottom,right:pr};
       out.push(entry);
-      if(!p.axis){if(valid.length)p.svg.append(el('text',{x:p.width/2,y:p.height/2,'text-anchor':'middle'},`No ${p.m.label.toLowerCase()} readings in ${windowText(hours)}`));continue;}
+      if(!p.axis){if(valid.length)p.svg.append(el('text',{x:p.width/2,y:p.height/2,'text-anchor':'middle'},`No ${nameOf(p.m)} readings in ${windowText(hours)}`));continue;}
       const y=v=>top+(p.axis.max-v)/(p.axis.max-p.axis.min)*(bottom-top);entry.y=y;
-      p.svg.append(el('title',{},`${p.m.label} (${p.m.unit}), ${windowText(hours)}`));
-      grid(p.svg,p.axis.ticks,p.axis.label,y,left,right,p.width);
-      timeAxis(p.svg,x,from,to,left,right,p.width,p.height);
-      if(p.m.key==='mqMv'){warnings(p.svg,readings,x,top,bottom,gapMs);if(threshold!==null)thresholdLine(p.svg,threshold,p.fit.shown,y,left,right,p.width,p.axis.max,'Threshold');}
+      p.svg.append(el('title',{},`${p.m.label}${p.m.unit?` (${p.m.unit})`:''}, ${windowText(hours)}`));
+      if(p.m.key==='thi')thiBands(p.svg,p.axis,y,left,pr,p.width);
+      grid(p.svg,p.axis.ticks,p.axis.label,y,left,pr,p.width);
+      timeAxis(p.svg,x,from,to,left,pr,p.width,p.height);
+      if(p.m.key==='mqMv'){warnings(p.svg,readings,x,top,bottom,gapMs);if(threshold!==null)thresholdLine(p.svg,threshold,p.fit.shown,y,left,pr,p.width,p.axis.max,'Threshold');}
       plotLine(p.svg,readings,p.m.key,x,y,gapMs,p.width,`chart-line series series-${p.m.key}`);
     }
     scales={kind:'split',left,right,from,to,panels:out};
@@ -297,8 +370,8 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     for(const b of root.children){
       const m=METRICS.find(x=>x.key===b.dataset.series),on=!hiddenSeries.has(m.key),r=valueRange(readings,m.key);
       b.setAttribute('aria-pressed',String(on));b.classList.toggle('off',!on);
-      b.querySelector('.series-range').textContent=r?`${fmt(m,r.min)}–${fmt(m,r.max)} ${m.unit}`:'no readings';
-      b.title=!on?`Show ${m.label.toLowerCase()} on the chart`:shown>1?`Hide ${m.label.toLowerCase()} from the chart`:'At least one reading stays on the chart';
+      b.querySelector('.series-range').textContent=r?withUnit(m,`${fmt(m,r.min)}–${fmt(m,r.max)}`):'no readings';
+      b.title=!on?`Show ${nameOf(m)} on the chart`:shown>1?`Hide ${nameOf(m)} from the chart`:'At least one reading stays on the chart';
     }
   }
   function drawCombined(readings,from,to){
@@ -339,17 +412,19 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
     if(split)ensurePanels();
     if(mode==='single'){$('trend-title').textContent=metric.label+' trend';$('trend-subtitle').textContent=SUBTITLE[metric.key]??`${metric.description} · ${metric.unit}`;}
     else [$('trend-title').textContent,$('trend-subtitle').textContent]=VIEW_TEXT[mode];
+    const thiView=mode==='single'&&metric.key==='thi';
     const legend=$('trend-legend');legend.hidden=mode==='single'&&!gas;
     legend.querySelector('[data-legend=line]').hidden=mode!=='single';legend.querySelector('[data-legend=threshold]').hidden=combined;
-    $('trend-note').hidden=mode==='single';$('trend-note').textContent=VIEW_NOTE[mode]??'';
+    $('trend-note').hidden=mode==='single'&&!thiView;$('trend-note').textContent=thiView?THI_NOTE:VIEW_NOTE[mode]??'';
     const readings=view?.readings??[],shown=shownMetrics();
     valid=readings.filter(r=>shown.some(m=>Number.isFinite(r[m.key])));
     $('trend-scrub').disabled=!valid.length;$('trend-scrub').max=String(Math.max(0,valid.length-1));
     const to=view?.to??now(),from=view?.from??to-hours*3600000;
     $('trend-window').textContent=`${formatDateTime(from)} – ${formatDateTime(to)} · ${timeZone()}`;
     const empty=$('trend-empty');empty.hidden=valid.length>0;
-    empty.textContent=busy?'Loading the trend…':view?`No ${mode==='single'?metric.label.toLowerCase():'sensor'} readings in ${windowText(hours)}.`:'No trend data yet.';
+    empty.textContent=busy?'Loading the trend…':view?`No ${mode==='single'?nameOf(metric):'sensor'} readings in ${windowText(hours)}.`:'No trend data yet.';
     if(combined)renderToggles(readings);
+    $('trend-thi').hidden=!thiView;if(thiView)renderThiSummary(readings);
     scales=null;
     const drawn=mode==='single'?drawSingle(readings,from,to):split?drawSplit(readings,from,to):drawCombined(readings,from,to);
     if(!drawn||!valid.length){scales=null;$('trend-detail').textContent='No reading selected';for(const p of panels??[])p.value.textContent='—';return;}
@@ -412,7 +487,7 @@ export function createTrends({api,current,now,isVisible,onData=()=>{}}) {
   $('trend-refresh').addEventListener('click',()=>load(true));
   $('trend-scrub').addEventListener('input',e=>updateSelection(Number(e.target.value),true));
   $('trend-scrub').addEventListener('blur',hideTooltip);
-  const pickAt=(svg,e)=>{if(!valid.length||!scales)return;const rect=svg.getBoundingClientRect(),t=scales.from+(e.clientX-rect.left-scales.left)/(rect.width-scales.left-scales.right)*(scales.to-scales.from);updateSelection(nearestIndex(valid,t),true);};
+  const pickAt=(svg,e)=>{if(!valid.length||!scales)return;const right=scales.panels?.find(p=>p.svg===svg)?.right??scales.right,rect=svg.getBoundingClientRect(),t=scales.from+(e.clientX-rect.left-scales.left)/(rect.width-scales.left-right)*(scales.to-scales.from);updateSelection(nearestIndex(valid,t),true);};
   for(const type of ['pointermove','pointerdown']){
     $('trend-svg').addEventListener(type,e=>pickAt($('trend-svg'),e));
     $('trend-panels').addEventListener(type,e=>{const svg=e.target.closest?.('svg.panel-svg');if(svg)pickAt(svg,e);});

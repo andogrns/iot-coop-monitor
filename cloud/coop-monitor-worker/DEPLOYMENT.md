@@ -1,5 +1,13 @@
 # Cloudflare deployment record
 
+**21 November 2026 rollout (user-requested after reviewing the local preview):** version `1bc3efed-c3d5-4b6c-b07e-cbe2d7f644bf` replaces `c10a2a0f`. The dashboard shows THI (temperature-humidity index), worked out in the browser from temperature and humidity: an Overview tile, a trend with heat-stress bands and the time spent in each band, THI in Side by side and All in one, and a History column.
+- **Assets:** `index.html`, `app.js`, `trends.js`, `style.css` and the new `thi.js`.
+- **Unchanged:** backend `src/` (as committed in `01fb53a`), CSV export; no migration, secret, binding, var or cron change.
+- **Before deploy:** `c10a2a0f` was current. Every other live asset matched local, and the four changed ones differed only by the THI change. 150/150 tests passed and `version-assets.mjs` reported 0 changes.
+- **Wrangler:** 5 assets uploaded, 15 already present.
+- **After deploy:** `/health` ok; all 20 live assets and the 16 versioned asset URLs match local; anonymous `/api/snapshot`, `/api/history` and `/api/alerts` return 401.
+- **Not done:** no D1/R2 write and no device action; the authenticated dashboard was not opened by the agent.
+
 **20 November 2026 rollout (user-requested in the same task):** version `c10a2a0f-425a-426c-ae9c-c73b071259f9` replaces `84bbab7f`. The History tab now shows numbered pages instead of "Load more", with Rows per page as the page size.
 - **Backend:** `src/history-pages.js` accepts an optional `offset` on entry-paged `/api/history`.
 - **Assets:** `app.js`, `index.html`, `history.css` and the new `history-pager.js`.
@@ -21,7 +29,7 @@
 
 **15 November 2026 rollout (user-authorized after local tests):** version `a32e1471-5276-438d-a0dd-0fac41693723`. Adds optional `state.health` storage, `recentBoots` in the snapshot, a Device health card on Overview, and Discord offline/back-online alerts on the existing `*/5` cron. No schema migration, secret or binding change. Before deploy: 113/113 local Node tests passed (7 new in `scripts/device-health.test.mjs`) and a dry run built. After deploy: `/health` returned `ok`, and live `app.js`, `index.html` and `style.css` SHA-256 matched local files. Not yet observed: a real health report from firmware 1.1.0, or a real Discord offline/online delivery (the bot invitation was still open on 13 November).
 
-**Record scope:** latest recorded rollout is **20 November 2026**, Worker `c10a2a0f-425a-426c-ae9c-c73b071259f9` (History numbered pages); see the first entry below. Infrastructure values retain their original verification dates and are not today's account status.
+**Record scope:** latest recorded rollout is **21 November 2026**, Worker `1bc3efed-c3d5-4b6c-b07e-cbe2d7f644bf` (THI on the dashboard); see the first entry below. Infrastructure values retain their original verification dates and are not today's account status.
 
 Updated 13 October 2026, Asia/Jakarta. Archives now shows one expandable entry per session with label/range/archive date, individual files and all/selected ZIP downloads. All nine deployed asset hashes matched; live Home Testing Session metadata, original-file preservation and independently decoded ZIPs passed (19 files / 2,206 entries; selected two / 1,245). Earlier History range counts, DD/MM/YYYY dates, ordering and page sizes remain. No migration was needed. This rollout checked public assets/health and the named archive only; device/infrastructure values not explicitly rechecked retain their earlier verification date. Authenticated production browser UI and fresh physical acceptance were not tested.
 
@@ -32,7 +40,7 @@ Updated 13 October 2026, Asia/Jakarta. Archives now shows one expandable entry p
 | Dashboard origin | `https://coop-monitor-worker.coop-monitor-worker.workers.dev` |
 | Device exchange | `https://coop-monitor-worker.coop-monitor-worker.workers.dev/api/device/exchange` |
 | Protocol | Version 1 |
-| Last recorded version | `c10a2a0f-425a-426c-ae9c-c73b071259f9` (20 November History numbered pages; no migration) |
+| Last recorded version | `1bc3efed-c3d5-4b6c-b07e-cbe2d7f644bf` (21 November THI on the dashboard; no migration) |
 | D1 database | `coop-monitor-db` |
 | D1 ID | `ea267d2d-f237-4374-9c72-d4fd6efb632c` |
 | D1 location | APAC; queries served by primary in HKG during checks |

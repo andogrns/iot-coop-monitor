@@ -1,5 +1,6 @@
 import { createHistoryExport } from './history-export.js?v=bbaff202f06f';
-import { METRICS, createTrends } from './trends.js?v=8ebf1b0bab53';
+import { METRICS, createTrends, metricValue, nameOf, withUnit } from './trends.js?v=aa8a7967c4c4';
+import { bandRange, readingThi, thiBand } from './thi.js?v=12dccfd4748f';
 import { createManualArchives } from './manual-archive.js?v=42f0aa27fd9a';
 import { createArchiveLibrary } from './archive-library.js?v=ac6e99daf55f';
 import { createHistorySelection } from './history-selection.js?v=08b600a0173d';
@@ -170,9 +171,9 @@ function renderTiles(d) {
     const charted = trends.selectedMetric() === m.key;
     const tile = el('button', 'metric-tile' + (charted ? ' selected' : ''));
     tile.type = 'button'; tile.dataset.metric = m.key; tile.setAttribute('aria-pressed', String(charted));
-    tile.title = `Show ${m.label.toLowerCase()} on the chart`;
-    const top = el('span', 'metric-top'); top.append(el('span', 'metric-label', m.label));
-    if (m.key === 'mqMv') top.append(el('span', 'badge'));
+    tile.title = `Show ${nameOf(m)} on the chart`;
+    const top = el('span', 'metric-top'); top.append(el('span', 'metric-label', m.tileLabel ?? m.label));
+    if (m.key === 'mqMv' || m.key === 'thi') top.append(el('span', 'badge'));
     tile.append(top, el('span', 'metric-value'));
     if (m.key === 'mqMv') { const gauge = el('span', 'gauge'); gauge.append(el('span', 'gauge-fill'), el('span', 'gauge-mark')); tile.append(gauge); }
     tile.append(el('span', 'metric-note'));
@@ -180,8 +181,8 @@ function renderTiles(d) {
     root.append(tile);
   }
   for (const m of METRICS) {
-    const tile = root.querySelector(`[data-metric="${m.key}"]`), v = r?.[m.key], note = tile.querySelector('.metric-note');
-    tile.querySelector('.metric-value').replaceChildren(document.createTextNode(Number.isFinite(v) ? formatNumber(v, { digits: m.precision, minDigits: m.precision, grouping: false }) : '—'), el('small', '', ` ${m.unit}`));
+    const tile = root.querySelector(`[data-metric="${m.key}"]`), v = metricValue(m, r), note = tile.querySelector('.metric-note');
+    tile.querySelector('.metric-value').replaceChildren(document.createTextNode(Number.isFinite(v) ? formatNumber(v, { digits: m.precision, minDigits: m.precision, grouping: false }) : '—'), el('small', '', m.unit ? ` ${m.unit}` : ''));
     note.classList.toggle('flag', r ? !Number.isFinite(v) : false);
     if (m.key === 'mqMv') {
       const b = tile.querySelector('.badge'), gauge = tile.querySelector('.gauge'), threshold = r?.mqThresholdMv;
@@ -203,11 +204,18 @@ function renderTiles(d) {
         : Number.isFinite(threshold) ? `${formatNumber(r.mqRatio, { digits: 2, minDigits: 2 })}× baseline · warning at ${formatNumber(threshold, { digits: 1, grouping: false })} mV`
         : 'No warning threshold yet (not calibrated)';
     } else {
-      const range = trends.stats(m.key);
+      const range = trends.stats(m.key), fixed = x => formatNumber(x, { digits: m.precision, minDigits: m.precision, grouping: false });
       note.textContent = !r ? 'No readings yet'
-        : !Number.isFinite(v) ? 'Sensor not responding'
-        : range ? `${range.hours} h range ${formatNumber(range.min, { digits: m.precision, minDigits: m.precision, grouping: false })}–${formatNumber(range.max, { digits: m.precision, minDigits: m.precision, grouping: false })} ${m.unit}`
+        : !Number.isFinite(v) ? (m.key === 'thi' ? 'Needs both temperature and humidity' : 'Sensor not responding')
+        : range ? withUnit(m, `${range.hours} h range ${fixed(range.min)}–${fixed(range.max)}`)
         : m.description;
+      // THI: heat-stress band of the latest reading (laying-hen bands, Kim et al. 2024; see thi.js).
+      if (m.key === 'thi') {
+        const b = tile.querySelector('.badge'), band = thiBand(v);
+        b.className = `badge ${d.stale ? 'muted' : band?.tone ?? 'muted'}`; b.textContent = band ? band.label : '';
+        b.title = band ? `THI ${bandRange(band)}: ${band.label}${d.stale ? ' (device offline; last reported reading)' : ''}` : '';
+        tile.title = 'Show THI on the chart. Temperature-humidity index, worked out from the AHT20 temperature and humidity (NRC 1971). Bands for laying hens (Kim et al., 2024): Comfort < 70, Alert 70–75, Danger 75–81, Emergency ≥ 81.';
+      }
     }
   }
 }
@@ -411,8 +419,10 @@ function historyRow(r, number) {
   const title = `${status.detail}\nFirmware status: ${r.status ?? 'none'}`;
   if (status.tone === 'ok') { const ok = el('span', 'history-ok', status.label); ok.title = title; statusCell.append(ok); }
   else statusCell.append(badge(status.label, status.tone, title));
+  const thi = readingThi(r), thiCell = value(thi, 1), band = thiBand(thi);
+  if (band) thiCell.title = `${band.label} (THI ${bandRange(band)})`;
   tr.append(el('td', 'num history-no', number ? number.toLocaleString() : ''), time, value(r.mqMv, 0), value(r.mqRatio, 2),
-    value(r.ahtTemperatureC, 1), value(r.humidityPct, 1), value(r.pressureHpa, 1), statusCell);
+    value(r.ahtTemperatureC, 1), value(r.humidityPct, 1), thiCell, value(r.pressureHpa, 1), statusCell);
   return tr;
 }
 function renderHistory() {
