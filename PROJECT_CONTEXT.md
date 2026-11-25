@@ -9,8 +9,21 @@ Updated **18 November 2026 (Asia/Jakarta)** from local source, Git state, a publ
 - **Worker:** live `1bc3efed` (21 Nov): THI on the dashboard (see the THI entry). It builds on `c10a2a0f` (20 Nov, History numbered pages), `84bbab7f` (18 Nov, Settings gas-warning alerts) and the Overview side-by-side and all-in-one views (`3af342f6`, same day). After deploy: `/health` ok; all 20 live assets match the local files; anonymous private routes return 401.
 - **Git:** the 20 Nov History change is commit `01fb53a`; the 21 Nov THI change is the commit after it, pushed to `origin/main` the same day. Still uncommitted on 21 Nov: the Week 1 notebook, `build_nb.py`, the 17 and 19 Nov handoffs, and some doc notes from other sessions.
 - **OLED:** no longer used (user decision, 18 November 2026). The notes below stay as project history. The firmware source keeps the disabled OLED code because no re-flash is planned; remove it at the next flash.
-- **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded).
+- **Open:** device firmware and connectivity check; real Discord delivery; a real field warning; authenticated dashboard review; field-run start and end (not recorded); modem reliability (see the next entry).
+- **25 November:** the field microSD reads as 32 MB of zeros on the PC (see the next entry).
 - **21 November:** THI (temperature-humidity index) added to the dashboard and deployed as `1bc3efed` (see the next entry).
+
+## Field microSD unreadable (25 November 2026, read-only diagnosis)
+
+The user plugged the field microSD (SanDisk Ultra 32 GB) into the laptop's USB reader to recover readings for the report. The card reports only **32 MB, all zeros**, while the same reader read it at 31.9 GB on 15 Nov. Likely a card-controller failure; file-recovery tools cannot help. Nothing was written to the card. Evidence: VERIFICATION.md. **Open:** try another reader or slot; image the full card first if it ever shows about 31.9 GB. Export the D1 data (16 Nov 08:12 to 19 Nov 00:06 WIB per the 19 Nov check) from History. **User update (same day):** the card was removed on 25 Nov, before the first PC insertion at 08:57, when the ESP Wi-Fi was fixed. If the device kept running, readings from 19 Nov 00:06 WIB to 25 Nov exist **only on this card**: the RAM queue holds 64 readings and there is no flash queue. Not verified: continuous running, whether the card was pulled while powered (no `SD_EJECT` reported), and the exact reconnect time in D1. Professional monolith (chip-level) recovery is the remaining option if other readers also show 32 MB.
+
+## Week 1 notebook: laying-hen temperature limit (23 November 2026, analysis only)
+
+The study birds are **laying hens**, not broilers (user correction). In `Week 1 Readings/Plots/build_nb.py` the broiler comfort zone 21–28 °C (Apalowo 2024) is replaced by the laying-hen thermoneutral zone **19–22 °C** (Avi 2024, Iraqi J. Vet. Med. 48(2):55–65, doi 10.30539/1y9y3h89, p. 56; Kim 2024 gives the same range for chickens). The coop never went to 22 °C or below in Week 1 (minimum 22.0 °C, 17 Oct 05:25), so temperature is above the zone 100% of the time and heat-stress hours are read from the laying-hen THI bands only. Story points 1–2, the hourly/heatmap panels, per-day table, dashboard cell, conclusions and reference R1 were updated; notebook rebuilt. The web dashboard already used only the laying-hen THI bands and needed no change. Uncommitted.
+
+## IEEE paper draft v1 (23 November 2026, local document only)
+
+The user (in Indonesian) asked for a first IEEE conference-paper draft in A4 using the project's information. User choices: author names as placeholders, Word .docx, **Week 1 data only** (16–23 Oct, `mq135-01`). Result: `outputs/ieee-paper-draft/IEEE_Paper_Draft_v1.docx` (+ `.pdf`, 6 pages, English, two columns), built by `build_paper.js` with figures from `make_figures.py`; details, sources and open `[TBD]` items are in that folder's `README.md`. The official IEEE A4 template could not be downloaded automatically (ieee.org returned HTTP 202 with no body), so the draft imitates its layout; paste into the official or venue template before submission. The paper keeps MQ-135 = relative gas response (no ppm). 21 references, DOIs checked against Crossref on 23 Nov. **Open:** target venue, authors, farm/deployment details, calibration history, acknowledgment. No device, cloud or Git action.
 
 ## THI on the dashboard (21 November 2026, deployed as `1bc3efed`)
 
@@ -36,6 +49,22 @@ The user asked for the History tab's "Load 100 more" button to become numbered p
 - **Evidence:** 144/144 tests, 20/20 synthetic browser checks plus failure paths, and a read-only production D1 comparison (5 pages equal a plain sort). Details are in VERIFICATION.md.
 - **Open:** user review of the live History tab (the agent did not sign in); Safari/Firefox and a real phone were not checked.
 
+## Enrichment final report: Months I and II filled (20 November 2026, coursework document)
+
+The user's Enrichment final-report template is filled for **Bulan I (September 2026)** and **Bulan II (October 2026)**. The portal maps assignment n to a calendar month, starting in September. TC Bulan I covers the research profile and role in BAB 1, plus 2.2.2 built from the September logbook. TC Bulan II has 4 theories and 6 verified 2021+ journal references (4 SKS assumed). EES Bulan I and II cover only the 4 ticked soft skills, and Bulan II uses only October events. The report also has the cover, the BINUS profile in 1.1 and 16 APA 7 references.
+
+The user reviewed the result and called it final on 20 November (ASG 2 deadline 20 Nov, 23:59). The current file is `outputs/final-report/Bulan 2 - Oktober/Final_Report_Grensando_Okt_v6.docx` (+ `.pdf`, gitignored). The folder is organized per month (`Bulan N - <Bulan>/` with `instruksi/`, `jawaban & draft/`, `arsip/`) plus `_Umum/` (template, learning plan, team doc) and `build/`.
+
+Files, user rules, month mapping, open sections and the rebuild pipeline (`outputs/final-report/build/`) are in [the final-report handoff](docs/SESSION_HANDOFF_2026-11-19_final_report.md). No device, cloud or Git action took place.
+
+## Recurring outages: modem suspected (19 November 2026, user assessment, not yet verified)
+
+- **Observation (Hermes 12-hour dashboard check, 19 Nov 11:01 WIB, read-only):** `coop-monitor-01` went stale. Last contact was 19 Nov 00:06:31 WIB (reading 45992). Boot `59f883…` (power-on 16 Nov 08:12 WIB), `cloudflare-1.2.0`, config revision 4 applied. No restart was reported before the device went silent. The cause was not established from the dashboard.
+- **User assessment:** the 4G modem (Airtel E5573Cs-609) is probably damaged from earlier testing. The user says the previous three outages were Wi-Fi/modem problems while the ESP kept running normally. The 15 Nov outage is documented below as "modem was down". The 6 Nov outage is documented only as an "internet issue". The microSD backup was added as secondary storage for this reason.
+- **Data impact:** if this is again a network-only fault, readings after 00:06 should be on the SD card (`/coop/bNNNNN.csv`) but not in D1/History. Backfill is not implemented, so the dashboard gap stays unless the CSV is merged by hand. If power was lost or the firmware hung, SD logging stopped as well.
+- **Pending on-site check (user, planned 20 Nov):** before power-cycling, confirm the board is still running and whether the modem's Wi-Fi is visible. Use `SD_EJECT` (or power off) before removing the card. Check whether a new `bNNNNN.csv` exists (a new file means a reboot) and the last timestamp in the newest file. After reconnection, `SD_STATUS` / `SD_TAIL` confirm logging continuity.
+- **Open:** replace the modem or use a temporary hotspot. Treat later dashboard gaps as likely modem outages until this is fixed, but confirm each one with SD or Serial evidence rather than assuming.
+
 ## Configurable gas-warning alerts (18 November 2026, deployed as `84bbab7f`)
 
 User (in Indonesian) asked for the Discord gas-warning message to be set from the dashboard: which service (Discord for now, more later), the message text, and after how long a warning it is sent; and invited fitting additions. **Implemented, tested and deployed** the same day after the user asked to deploy directly (Worker `84bbab7f-8749-4e3e-9472-c33f847a48e4`, see DEPLOYMENT.md). Not committed to Git. Firmware, device protocol and migrations unchanged.
@@ -59,49 +88,57 @@ User (in Indonesian) asked for two more viewing modes in the Overview tab: every
 - **Deployed** as Worker version `3af342f6-0121-4106-a93d-63fbe3ab9a96` (only `index.html`, `app.js`, `trends.js`, `style.css` changed; see DEPLOYMENT.md). Not committed to Git.
 - **Open:** the agent did not sign in to the live dashboard, so the new views have only been seen with synthetic data. Real Safari/Firefox and a real phone not checked.
 
-## Coop Case V7T: triangular tube, ESP32 only (18 November 2026, 2D layout + Blender prototype, awaiting approval)
+## Coop Case V7T: triangular tube, ESP32 only (18 November 2026, revision 3: 2D layout, Blender file and renders)
 
-The user asked for an alternate V7 with the shape of a triangular tube instead of a tetrahedron. Requests:
-- Eliminate the unused space.
+The user asked for an alternate V7 shaped as a triangular tube instead of a tetrahedron, with these requirements:
+- Eliminate unused space.
 - Add a hook at the top back for wall hanging.
 - Same protocols as before.
 - ESP32 (V7a) contents only; no Pi version.
 
-Later the user asked for the sheet image and the Blender file, with no renders yet. **The layout is not approved yet:** treat the 3D as a prototype until the user approves `v7t_2d_layout.png`.
+After reviewing the Blender file, the user asked for changes. The rule is 2D first; the Blender file is updated only after approval. Focus on V7T, not V7. After seeing the revision 3 sheet, the user asked for the Blender file and renders directly, and they were built from revision 3. Nothing is printed or sliced yet.
 
-- **Shape:** upright equilateral prism, 122 mm side, flat closed back on the wall, 116 x 98 x 178 mm (204 mm with the tab).
-- **Parts:**
-  - **Body:** back plate + floor + back wings + hanging tab, one part, printed back-down. The tab is 40 x 26 x 5 with a keyhole for one 4 mm wall screw.
-  - **Press-on lid:** 8 mm skirts over the door tops, 3 friction pins into the wing and pillar tops, a notch round the tab.
-  - **Front pillar:** separate part, M3 screw from under the floor.
-- **Doors:** no tools, no latch.
-  - Bottom edge sits in a floor groove (lip and ridge); top edge sits behind the lid skirt.
-  - The vertical edges lap about 5 mm over steps on the pillar and the back wings.
-  - To open: lid off, tilt the door top out about 20°, lift it out. Either door comes off on its own.
-  - **Changed from the first proposal:** the first top-skirt / lift-and-swing version could not release, because the low pods hit the floor before the door top cleared the skirt.
-- **Door S:**
-  - Pods as V7, stacked at the back end: AHT20 low, MQ-135 above it (window under the can, pins + Dupont out of the +u end). V7 pod lids and cartridges fit unchanged.
-  - SD seat 24 x 42 beside the pods.
-  - Breadboard above, ESP32 at its top with the USB plug going up.
-- **Door M:**
-  - V7 modem bay 110 x 80 x 18 with the USB plug space below it.
-  - Front-corner side: a fixed 3 mm lip holds the modem edge. A second strap there would hit the SD seat.
-  - Other side: one 20 mm strap through two loops.
-  - High knock-out vent.
-- **Back:** spare strip with M3 bosses, made only from leftover space; three cable loops for the ESP32 lead.
-- **Floor ports:** P1 ESP32 lead, P2 modem lead, P3 blank or vent plug.
-- **Size:** the MQ-135 pod and its pins on door S against the modem bay on door M set the side; 121 mm fails the fit check. A measured modem may allow a smaller case.
+- **Wording:** the user calls the doors "lid". In our files, the press-on top is the lid.
+- **Orientation:** right-handed world (Y from the wall, Z up). Seen from the front, door S (sensors, X < 0) is on the right and door M (modem) on the left. Revision 1's sheet was mirror-image; revisions 2 and 3 draw true views.
+- **Revision 2 (user requests):**
+  - The pod vents became printed louvres.
+  - Cable entry P4 in the lid at the back corner behind door S (the corner the user circled), closed by a two-cable plug. Floor ports P1 to P3 kept as spares (user choice).
+  - Finger pulls removed: the user took them for an OLED window, but V7T never had one.
+  - The modem (Airtel 4G Hotspot E5573Cs-609, Huawei, published 96.8 x 58 x 12.8) sits with its front on door M, with a Ø19 power-button hole and two Ø4 LED holes, 22 mm above and below the button (estimated from a photo).
+  - The modem's micro-USB is in the middle of a long edge (user) and points at the back corner BR.
+- **Revision 3 (user):**
+  - All modules (AHT20/BMP280, MQ-135, SD) plug into the breadboard; the ESP32 must not.
+  - The modules face the door (user choice, recommended).
+  - Lower the case where possible: the user chose "lowest" over "narrow", which was a 126 mm side and about 149 mm tall.
+- **Revision 3 layout:**
+  - Triangle side 142 mm. Case 136 wide x 115 from the wall x 110 tall (136 with the tab), 0.95 L.
+  - Door S:
+    - The breadboard (57 x 85 x 8.5) is face-down at w 27.5, on a 1.6 mm carrier held by two M3 screws into two posts.
+    - Module positions are fixed on the breadboard: SD on the back-corner half with the card end 4 mm above the breadboard top, so the card can be pulled with the lid off. MQ-135 on the front half. AHT20 low on the back half, with a short duct.
+    - The louvres sit in front of the AHT20 and the MQ-135, with 200-mesh pads.
+    - The ESP32-C3 has its own seat at the back corner under P4, USB-C up. Its jumper headers are allowed 27 mm.
+  - Door M modem opening (user sketch, after the renders): one window instead of three holes. Ø24 round over the button and a 9 mm slot 53 mm long over both LEDs, so the modem can sit a few mm off. Defined as `MODEM_WINDOW` in the geometry module. The renders still show the three holes.
+  - Door M: the modem stands on the bottom rib and slides in from the top between two lips, with no strap. The lid stops it and the USB plug locks it. The plug points to BR and the lead runs along the top of the back plate to P4. The knock-out louvre moved to the front-corner strip.
+  - Why wider: the face-down breadboard block (about 37 mm deep across its width) and the modem meet at the 60° front corner. 141 mm fails (carrier to modem).
+  - The top edge ribs must be interrupted above the ESP32 plug (door S) and over the modem pocket (door M).
 - **Rule for door contents:** anything deeper than skin + gap must stay `door_free_u()` clear of the corner steps, or it hits them as the door tilts out. The fit check enforces this.
 - **Files:**
-  - Geometry and fit check: `work/coop_case_v7t_geometry.py`.
-  - Sheet: `work/draw_case_v7t_tube_20261118.py`.
-  - 3D build: `work/build_coop_case_v7t.py` (Blender 5.2, about 3 s, no renders, no STL).
-  - Outputs in `outputs/coop_case_v7t_tube/`: `v7t_2d_layout.png`, `layout_parameters.json`, `V7T_Tube.blend` (printable parts only), `validation_v7t.json`.
+  - Geometry and fit check: `work/coop_case_v7t_geometry.py` (revision 3). The P4 position and the ESP32 seat are placed by search.
+  - Sheet: `work/draw_case_v7t_tube_20261118.py` (revision 3).
+  - 3D build: `work/build_coop_case_v7t.py` (revision 3; Blender 5.2; checks only with `-- --no-render`, about 2 s; with the six Cycles renders, about 6 min).
+  - Sources for revisions 1 and 2 are frozen in `outputs/coop_case_v7t_tube/r1_sources/` and `r2_sources/`; revision 3 before the 20 November change in `r3_sources/` (with `V7T_Tube_r3.blend`) and `renders_r3/`.
+  - 20 November 2026 (user decision): the spare M3 boss strip on the back plate is removed; the back-wall lead loops stay. Re-rendered with the single modem window.
+  - Outputs in `outputs/coop_case_v7t_tube/`:
+    - Revision 3: `v7t_2d_layout.png` and `layout_parameters.json`.
+    - Revisions 1 and 2: copies with `_r1` and `_r2` in the name.
+    - Revision 3 3D: `V7T_Tube.blend` (printable parts, camera, lights), `validation_v7t.json`, `renders/` (6 PNG).
 - **Open:**
-  - User approval of the layout.
-  - The same measurements as V7: modem size and USB port position, breadboard, USB-C plug and bend.
-  - Corner coupon (pillar step + door lap + groove + lid skirt + lid pin) and a floor-port plug coupon.
-  - STL export and slicing after approval; renders when the user asks.
+  - User review of the revision 3 renders and Blender file.
+  - Measure the modules: MQ-135 height (22 assumed), AHT20 and SD boards, their breadboard positions.
+  - Measure the modem: button and LED positions, micro-USB plug length.
+  - Measure the breadboard, the ESP32 jumper headers, the USB-C plug and bend, and the lead diameters for the P4 plug.
+  - Coupons: a louvre coupon, a corner coupon, and the P4 plug.
+  - 25 November 2026 (user asked): STLs exported (`stl/`, by `work/export_coop_case_v7t_stl.py`) and reference-sliced (`slicing/`, by `work/slice_coop_case_v7t.py`; PrusaSlicer 2.9.6, MK4S 0.4, PETG, 0.20 mm, 4 perimeters, 15 % gyroid). Full kit 189.3 g, about 8 h 04 min. Supports: body 2.9 %, door M 6.9 % of extrusion. See `Printing setup.md`. Not printed; the user's printer is not known, so the G-code is MK4S-only.
 
 ## Coop Case V7: tetrahedron (16 November 2026, 2D layout + 3D prototype, awaiting approval)
 
@@ -351,7 +388,7 @@ User reported the field launch went through and asked for a Week 1 definition of
 User asked to test "temperature and humidity affect the MQ readings" with plots and heatmaps, then derive an early-warning threshold with a clustering algorithm. Same 127,678 eligible Week 1 rows / 2,128 five-minute medians, module `mq135-01`. **Humidity: supported.** Same-day r positive on 8/8 days (sign test p = 0.008); 30-minute changes r = +0.175 (circular-shift p < 0.001); 22 of 29 large humidity moves had MQ moving the same way (p = 0.008); MQ rose after 7 of 7 rapid humidity rises (mean +10.5 mV, p = 0.003), including the confirmed 23 October rain (747 to 798 mV in a minute). Within-day slope +0.64 mV per RH point (95% interval 0.37-0.89), about 21 mV over the usual daily swing. **Temperature: not shown** (pooled r = -0.04; daily r -0.71 to +0.69; 30-minute changes p = 0.36; not separable from humidity, r = -0.71 between them). Caveat: same-day correlation is mostly shared daily rhythm (same-day r 0.37 vs other-day 0.24, p = 0.23), so the conclusion rests on the short-term and event tests; sensor effect versus real gas release is still not separable. **Clustering, proposal only, not approved or applied:** k-means k = 2 on the whole week splits the start-up rise at 656 mV (silhouette 0.81); k-means k = 3 on the settled period (from 18 October 00:00) gives Normal < 729, Elevated 729-754, High >= 754 mV. Proposed early warning: five-minute median >= 754 mV held 30 minutes; watch at 729 mV. Upper boundary under checks: 747-757 leaving out one day, 743-762 resampling days, 754 after removing the humidity slope. The settled readings are one continuous hump (silhouette 0.53 at k = 3), so three states is a design choice and High covers 34% of 18-23 October; the top group of k = 5 (768 mV, 10%) nearly equals the 5 November 769 mV candidate, which stays frozen for the Week 2 test. The stored 695.5 mV threshold was exceeded 99% of the settled period. None of these millivolt values transfer to `mq135-02`; rerun `analyze.py` on that module's data. Open decision for the user: which candidate (754 mV three-state or 769 mV) to carry forward. No firmware, settings, device, cloud or Git action. matplotlib/scipy/scikit-learn were installed only into ignored `outputs/analysis-libs-20261110/`. Deliverable: ignored `outputs/week1-hypothesis-clustering-2026-11-10/` (`REPORT.md`, `report.html`, `results.json`, 11 figures, scripts).
 
 ### Week 1 notebook with literature limits, insight story and Gradio dashboard (13 November 2026, analysis only)
-User (writing in Indonesian) asked for all Week 1 plots in a notebook, 3D plots, temperature limits and sensor references with DOIs, a Gradio dashboard inside the notebook, and a markdown insight story that explains critical times from published limits instead of statistical lines. Deliverable: `Week 1 Readings/Plots/week1_analysis.ipynb` (Indonesian, executed outputs embedded). Literature limits used: broiler comfort zone 21-28 °C (Apalowo 2024, doi 10.3390/poultry3020010; number taken from search-result text, not read in full), THI bands comfort < 70 / alert 70-75 / danger 76-81 / emergency > 81 (Kim 2024, doi 10.3390/ani14071076, verified in full text; NRC 1971 formula, with 75 taken as the start of danger), NH3 < 25 ppm (Bist 2023, doi 10.1016/j.jenvman.2022.116919; from a secondary citation), and RH 40-60% (UGA extension, **no DOI**; no 2021-2026 DOI source for an RH range was found). Humidity effect on MOX sensors: Wang & Zhou 2022, doi 10.3390/ma15248728. BMP280 accuracy: Kusuma 2023, doi 10.14710/ik.ijms.28.2.189-202. Datasheets have no DOI. Every DOI was checked against Crossref. Findings: temperature > 28 °C every day about 10:00-17:30 (100% of days 12:00-15:00, peak 30-31 °C); THI >= 75 about 6-12 h/day, never emergency (max 79.0); RH > 60% most nights 19:00-07:00; in the settled period, median MQ is lowest midday (730-736 mV) and highest 21:00-02:00 (up to 758 mV); THI-MQ r ≈ -0.03, so heat risk and gas-response risk fall in separate windows. The notebook states that the 729/754/695.5 mV lines are not literature limits and that the 25 ppm limit needs a calibrated MQ. **Gradio cell not executed or tested** (gradio is not installed here; the user must `pip install gradio`); its plotting functions were executed. No firmware, device, cloud or Git action. 17 November: notebook explanations expanded (hourly-table reading guide, 5-minute transition grids, THI ≥ 75 crossing table); the builder now lives at `Week 1 Readings/Plots/build_nb.py` (edit it, not the .ipynb), and the artifact sources are in ignored `outputs/week1-artifact-sources-2026-11-11/`. Details and open items: [SESSION_HANDOFF_2026-11-17.md](docs/SESSION_HANDOFF_2026-11-17.md).
+User (writing in Indonesian) asked for all Week 1 plots in a notebook, 3D plots, temperature limits and sensor references with DOIs, a Gradio dashboard inside the notebook, and a markdown insight story that explains critical times from published limits instead of statistical lines. Deliverable: `Week 1 Readings/Plots/week1_analysis.ipynb` (Indonesian, executed outputs embedded). Literature limits used: broiler comfort zone 21-28 °C (Apalowo 2024, doi 10.3390/poultry3020010; number taken from search-result text, not read in full), THI bands comfort < 70 / alert 70-75 / danger 76-81 / emergency > 81 (Kim 2024, doi 10.3390/ani14071076, verified in full text; NRC 1971 formula, with 75 taken as the start of danger), NH3 < 25 ppm (Bist 2023, doi 10.1016/j.jenvman.2022.116919; from a secondary citation), and RH 40-60% (UGA extension, **no DOI**; no 2021-2026 DOI source for an RH range was found). Humidity effect on MOX sensors: Wang & Zhou 2022, doi 10.3390/ma15248728. BMP280 accuracy: Kusuma 2023, doi 10.14710/ik.ijms.28.2.189-202. Datasheets have no DOI. Every DOI was checked against Crossref. Findings: temperature > 28 °C every day about 10:00-17:30 (100% of days 12:00-15:00, peak 30-31 °C); THI >= 75 about 6-12 h/day, never emergency (max 79.0); RH > 60% most nights 19:00-07:00; in the settled period, median MQ is lowest midday (730-736 mV) and highest 21:00-02:00 (up to 758 mV); THI-MQ r ≈ -0.03, so heat risk and gas-response risk fall in separate windows. The notebook states that the 729/754/695.5 mV lines are not literature limits and that the 25 ppm limit needs a calibrated MQ. **Gradio cell not executed or tested** (gradio is not installed here; the user must `pip install gradio`); its plotting functions were executed. No firmware, device, cloud or Git action. 17 November: notebook explanations expanded (hourly-table reading guide, 5-minute transition grids, THI ≥ 75 crossing table); the builder now lives at `Week 1 Readings/Plots/build_nb.py` (edit it, not the .ipynb), and the artifact sources are in ignored `outputs/week1-artifact-sources-2026-11-11/`. Details and open items: [SESSION_HANDOFF_2026-11-17.md](docs/SESSION_HANDOFF_2026-11-17.md). 21 November: on request ("buatin centroid threshold nya"), section 6 now derives the centroid thresholds explicitly (6.1 formula T = midpoint of adjacent centroids; 6.2 step 1 k = 2: centroids 571.4/740.2, T0 655.8 mV, settled from 18 Oct 00:00; 6.3 k = 3 centroid table 716.5/742.3/765.1 and thresholds 729.4/753.7 mV; 6.4 hand-written k-means iterations, 20 random starts (6 local solutions, T1 728.4-732.1, T2 752.8-756.2) and an exhaustive search confirming the scikit-learn result is the global WCSS minimum; old silhouette cell is 6.5). Values unchanged, still `mq135-01`-only proposals. Built through `build_nb.py` as before.
 
 ### Week 2 field odour verification sheet (17 November 2026, prepared, not yet used)
 The notebook was accepted. The professor's next request: verify on site at 07:00-09:00 (where Fig. 4.1 shows temperature up / RH down) whether "high odour" coincides, as ground truth toward the user's end goal of a **multi-sensor threshold** (not MQ alone). Week 1 check (analysis only): at 07:00-09:00 temperature-RH r is -0.76 to -0.93 every day, settled MQ has a small morning hump (06-08 h median 749-752 mV vs 733-737 at 04-05 h), but RH-MQ r flips sign between days (-0.89 to +0.69), so sensors alone do not explain the morning MQ. Created a private Sheets artifact, "Survei Lapangan Kandang" (https://claude.ai/artifact/6Tf9MhkYhCtVYNd3F3kMDT): tab Observasi (one row per rating; slots 08:00-09:00 every 10 min (user narrowed the window and asked for denser slots; comparison slots dropped), prefilled for 18 November with the date stored as text 18/11/2026; two raters on the VDI 3882 0-6 intensity scale, "high" = mean >= 4 as a proposal; dashboard-seen flag for blinding; ventilation, bird activity, feeding, litter, droppings, water/cleaning, weather, wind, optional NH3 reference ppm, photo file; grey sensor columns to fill later from device 5-minute medians, THI computed), Info Kunjungan (per visit: device on, dashboard Connected, device-vs-phone clock offset, bird count/age, feeding, last cleaning), Panduan (scale, steps, MQ-135-is-not-ppm note). Proposed analysis once labels exist: logistic regression or a small decision tree on MQ (relative to `mq135-02` baseline), RH, temperature/THI, pressure, 30-minute RH change and hour, leave-one-day-out validation, AUC versus MQ-only. Open: confirm the device is installed and uploading in the coop during observations (last backend coop reading was 10 November); Week 1 mV thresholds do not transfer to `mq135-02`.

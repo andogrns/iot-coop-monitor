@@ -1,5 +1,35 @@
 # Coop Monitor verification
 
+## MicroSD card unreadable on the PC: 25 November 2026 (read-only diagnosis, no recovery yet)
+
+- **Request (user):** recover the coop sensor readings from the field microSD (SanDisk Ultra 32 GB) after it would not open on the laptop.
+- **Method:** read-only only. No format, chkdsk, repair tool or write to the card. The physical disk needs admin (denied). The volume `D:` was readable without admin and was imaged with `dd` to ignored `outputs/sd-recovery-20261125/visible_32MB.img`.
+- **Result:** the FNK TECH USB reader (VID 3207, PID 0300, serial 816820090226) reports the card as **32,096,256 bytes** (62,688 sectors) with no file system. All 62,688 sectors read back as zeros, with no read errors. The same reader saw this card at 31,914,983,424 bytes with an MBR on 15 Nov 13:07 (Windows `Partition/Diagnostic` event 1006). All four insertions on 25 Nov (08:57–10:09) report 32,096,256 bytes. The System log has no disk errors.
+- **Interpretation (inference, not proven):** the card's controller no longer exposes its flash. It reports a small placeholder capacity of zeros, a known failure mode after a firmware or translation-table fault. The reader is the same one that read the card before. File-recovery software cannot reach the data, because the host never sees the real flash. Untested: another reader or slot, and a cold retry.
+- **Alternative source:** the 19 Nov dashboard check recorded boot `59f883…` (power-on 16 Nov 08:12 WIB) uploading to D1 until 19 Nov 00:06:31 WIB (reading 45992). D1 was not read in this session. No local copy of any `bNNNNN.csv` was found under the user profile.
+- **No device, cloud, account or Git action.**
+
+## Coop Case V7T STL export and reference slicing: 25 November 2026 (software only)
+
+- Evidence layer: STL export from `outputs/coop_case_v7t_tube/V7T_Tube.blend` (Blender 5.2, `work/export_coop_case_v7t_stl.py`) and slicing with portable PrusaSlicer 2.9.6 using the V5a reference profile (`work/slice_coop_case_v7t.py`). No printing, physical fit, device, cloud or Git action.
+- All 11 STLs exported with determinant +1 rotations; volumes match `validation_v7t.json` to 0.01 cm3; print sizes match its `print_orientation` figures. Every STL sliced with no slicer warnings.
+- Reference result: full kit 189.3 g, 8 h 04 min. Largest parts: body 82.0 g (3 h 38 min, support 2.9 % of extrusion), door M 31.0 g (support 6.9 %).
+- Does not establish: results on the user's printer or filament, physical fit, or that the assumed module, modem and breadboard sizes are right.
+
+## Week 1 notebook laying-hen temperature limit: 23 November 2026 (analysis only, host execution)
+
+- **Change (user request):** broiler comfort zone 21–28 °C replaced by the laying-hen thermoneutral zone 19–22 °C in `Week 1 Readings/Plots/build_nb.py`; rebuilt with Python 3.13 and `outputs/analysis-libs-20261110/`: 49 cells, 23 executed code cells, 0 errors. Previous notebook copied to the session scratchpad before rebuilding.
+- **Source check:** Avi 2024 (doi 10.30539/1y9y3h89) full-text PDF read: p. 56 "thermoneutral zone which is 19-22°C for laying hens"; Crossref title/author/volume/pages match. Kim 2024 full text (Europe PMC XML) states "the thermoneutral zone of chickens ranges from 19 to 22 °C" (citing Pawar 2016).
+- **Results:** 5-minute medians 22.0–31.3 °C; 100% of the time above 22 °C, 0% within 19–22 °C; THI bands unchanged (Comfort 8.2%, Alert 49.6%, Danger 42.2%, Emergency 0%). Figures inspected: section 3 time series and section 3A hourly panels.
+- **Not checked:** opening the notebook in Jupyter/VS Code; the Gradio cell (syntax only). No device, cloud or Git action.
+
+## Week 1 notebook centroid thresholds: 21 November 2026 (analysis only, host execution)
+
+- **Change (user request):** section 6 of `Week 1 Readings/Plots/week1_analysis.ipynb` gains 6.1–6.4 (centroid definition and midpoint formula, k = 2 step, k = 3 centroid and threshold tables with two figures, hand-written k-means checks); the old silhouette cell becomes 6.5 and one conclusion bullet names the centroids. Edited in `build_nb.py`, rebuilt with Python 3.13 and `outputs/analysis-libs-20261110/`: 49 cells, 23 executed code cells, 0 errors.
+- **Results:** k = 2 on all 2,128 medians: centroids 571.4/740.2 mV, T0 655.8 mV, silhouette 0.81, last median below T0 at 17 Oct 17:30, so the settled start 18 Oct 00:00 matches `settled`. k = 3 on 1,674 settled medians: centroids 716.5/742.3/765.1 mV, thresholds 729.4/753.7 mV (25.3/41.0/33.8% of the time), same as the 10 November report.
+- **Checks:** an exhaustive search over all 17,391 boundary pairs gives the same minimum WCSS (119,705.87) and centroids as scikit-learn (difference 0.000000 mV); centroids equal their members' means; nearest-centroid and threshold labels differ for 0 of 1,674 points. Manual Lloyd runs from a percentile start and 20 random starts stop at local solutions with thresholds within about ±2 mV. Of the 35 cells in the 17 November build, the 33 other than the section 6 intro and the conclusions are identical in source and output.
+- **Not checked:** opening the notebook in Jupyter/VS Code; the Gradio cell (still syntax-checked only). No device, cloud or Git action.
+
 ## THI on the dashboard: 21 November 2026 (deployed as `1bc3efed`)
 
 - **Change (user request):** THI from the Week 1 notebook added to the dashboard, computed in the browser. New `public/thi.js`; changes in `public/trends.js`, `app.js`, `index.html`, `style.css`, `scripts/version-assets.mjs` (orders `thi.js`); new `scripts/thi.test.mjs`. Backend, API, D1, CSV export and firmware unchanged.
@@ -32,6 +62,16 @@
 - **Deploy (user-requested):** before the deploy, `84bbab7f` was current. The live `index.html`, `app.js` and `history.css` matched Git HEAD; every other checked live asset matched local. Wrangler uploaded 4 assets (15 already present) and reported version `c10a2a0f-425a-426c-ae9c-c73b071259f9`. After the deploy: `/health` ok; 12 live assets match local, including `history-pager.js` and the versioned `app.js` URL. Anonymous `/api/history` (with `offset`), `/api/snapshot` and `/api/archives/selection` return 401; the CSP header is present.
 - **Not checked:** the authenticated live dashboard (the agent did not sign in), Safari/Firefox and a real phone. No D1/R2 write, no device action, no Git commit. The newest stored reading was still 18 November 17:06 UTC, so the device had not uploaded since.
 
+## Enrichment final report, Bulan I and II: 20 November 2026 (coursework document, local only)
+
+- **References:** 7 new journal references were checked through `api.crossref.org` (authors, year, volume, issue, pages) and `doi.org` resolution: Bekele 2023, Chai 2022, Choudhary 2024, Concas 2021, Janse 2021, Ojo 2022, Papaconstantinou 2023. Papaconstantinou was later removed again, so 6 stay in the report.
+- **Full-text checks:** Choudhary (Springer OA, §3.2.1 three-layer architecture), Janse (PMC8572982: linear association, range sensitivity, not causal) and Papaconstantinou (Copernicus). The other claims rest on abstracts. Lombardi 2021 was dropped because the MDPI full text could not be fetched.
+- **Build:** `outputs/final-report/build/build.sh` gave docx-skill `validate.py` "All validations PASSED" on each build. Word COM updated the TOC and exported a PDF. Pages were rendered with PyMuPDF and visually checked (indentation, list numbering, references, justified lines).
+- **Equivalence check:** the fault-injection revert produced text identical to `Okt_v4`.
+- **Word COM failure:** one finalize run failed ("Command failed") and left its own hidden WINWORD running. That process, matched by start time, was stopped and the retry passed.
+- **Facts used:** October facts come from the dated entries below (2, 4, 10, 12, 13, 15 and 22 October). September facts come from the user's portal logbook and the team prototyping document.
+- **Not checked:** no submission to the portal, no Drive upload and no Git action.
+
 ## OLED no longer used: 18 November 2026 (decision only)
 
 - **Decision (user):** the OLED module is not used any more. The earlier OLED records in this file and in `PROJECT_CONTEXT.md` stay as history of how the project progressed.
@@ -55,6 +95,79 @@
 - **Deployment (user-authorized):** Worker `84bbab7f-8749-4e3e-9472-c33f847a48e4` replaced `3af342f6` (still live before deploy). Pre- and post-deploy checks are listed in `cloud/coop-monitor-worker/DEPLOYMENT.md`: untouched live assets matched local before deploy, every changed and shared asset matched local after deploy, `/health` ok, the new routes return 401 without the owner key.
 - **Live cron after deploy (read-only `wrangler tail`, about 6 minutes, stopped at its set time limit):** the `*/5` run at 10:15:26 UTC (alert check with the new code) and the `*/15` run at 10:15:11 UTC both ended `ok` with no exception or console error. The window also held 53 `POST /api/device/exchange` requests, all with outcome `ok`. The tail does not show whether a message was due or sent.
 - **Not verified:** the authenticated live dashboard, a real Discord delivery (the bot was not in any server at the last check), mention permission, a real field warning, Safari/Firefox, a real phone.
+
+## Coop Case V7T revision 3, spare boss strip removed + re-render: 20 November 2026 (software checks only)
+
+- **Change:** at the user's request, the spare M3 boss strip (4 x 2 bosses) on the back plate is gone, from the geometry, the Blender build and the sheet. The lead loops stay. The previous state is kept in `outputs/coop_case_v7t_tube/r3_sources/` (sources + `V7T_Tube_r3.blend`), `renders_r3/` and the `_r3` files.
+- **2D:** the fit check is ALL OK, the sheet is redrawn, and the label lint finds no overlaps (201 labels).
+- **Blender rebuild with renders (Blender 5.2):**
+  - All 11 parts are manifold and in one piece each, and the only overlaps are the press fits.
+  - The stand-in components are clear of every part.
+  - Both door-removal sweeps are clear, and the lid lifts clear by 8 mm.
+  - Body overhang is 497 mm², about the same as before.
+- **Renders:** six new Cycles images in `renders/` show the single modem window and the plain back wall. Reviewed: inside from above, front left, door S tilted out, exploded.
+
+## Coop Case V7T revision 3, single modem window: 18 November 2026 (software checks only)
+
+- **Change:** at the user's request, door M has one opening instead of three holes: Ø24 over the button and a 9 mm wide slot 53 mm long over both LEDs (`MODEM_WINDOW`). No new renders, as asked.
+- **2D:** the fit check is ALL OK, the sheet is redrawn, and the label lint finds no overlaps (201 labels).
+- **Blender rebuild (`-- --no-render`):**
+  - All 11 parts are manifold and in one piece each, and the only overlaps are the press fits.
+  - The stand-in components are clear of every part.
+  - Both doors come off without collisions, and the lid lifts clear.
+- **Renders:** the six images in `renders/` predate this change and still show the three holes.
+
+## Coop Case V7T triangular tube, revision 3 Blender build and renders: 18 November 2026 (software checks only)
+
+- **Evidence layer:** Blender mesh checks, a door-removal sweep and renders on the CAD model, rebuilt from the revision 3 layout at the user's request. Not printed, not sliced, no STL. Module, modem, breadboard and lead sizes are assumed.
+- **Build:** `work/build_coop_case_v7t.py` in Blender 5.2.2 with the `MANIFOLD` solver. All 11 parts are manifold and in one piece each: body, lid, pillar, door S, door M, breadboard carrier, cable plugs P1 and P2, blank plug P3, two-cable plug P4, and the alternative vent plug.
+- **Assembled overlaps:** only the designed press fits:
+  - Lid pins: 2.3 mm³ in the body, 1.2 mm³ in the pillar.
+  - Floor plugs: 1.2 mm³ each.
+  - P4 plug in the lid: 0.7 mm³.
+  - The door edges and the carrier only touch.
+- **Stand-in components:** none touch a printed part. These were the modem, the breadboard, the SD, AHT20 and MQ-135 modules (board plus can), the jumpers (kept clear of the AHT20 duct), the ESP32 board, its parts and Dupont headers, both USB plugs, the modem lead, the spare strip, the spare channel and the modem lead run.
+- **Door removal (lid off, the other door and its contents in place):** 55 poses, tilting to 7°, lifting 3 mm, then tilting on to 20°. No collisions for S or M.
+- **Lid:** lifted 8 mm together with the P4 plug, it clears the doors, the carrier and the tab.
+- **Print sizes (mm):**
+  - Body on its back: 136 x 136, 115 tall.
+  - Lid: 136 x 112 x 10.
+  - Doors: 116 x 104, 36 (door S) and 16 (door M) deep.
+  - Carrier: 58 x 97 x 1.6.
+  - Pillar: 15 x 105 x 6.
+- **Material:** about 202 g PETG if printed 100 % solid (upper bound).
+- **Downward-facing area in print orientation, mm²:**
+  - Body 497, door M 496 (modem lips), lid 115 (P4 counterbore at the bed), pillar 34, door S 11.
+  - The louvre slats are at 35° from vertical.
+  - This is not a slicer result.
+- **Renders (Cycles, 48 samples, 1600 x 1200):** six images in `outputs/coop_case_v7t_tube/renders/`, reviewed. The stand-in components are plain blocks.
+- **Saved file:** contains only the 11 printable meshes (checked by an assert), plus the camera and lights.
+- **Not verified:** slicing, print, fit, louvre airflow, door feel, hanging strength, heat, and the real module and modem positions.
+
+## Coop Case V7T triangular tube, layout revision 3: 18 November 2026 (2D software checks only)
+
+- **Evidence layer:** a 2D fit check, a size search over layout options, and a font-metric check of the sheet. The Blender file was not rebuilt; it is still revision 1. Not printed, not sliced, no renders, no STL.
+- **Option search:** box models of door S and door M checked against the shell and each other in plan, with 2 mm clearance; the modem plug was tried on either side.
+  - Modules facing the door: ESP32 beside the breadboard needs a 143 mm side (about 110 tall); ESP32 above the breadboard needs 125-126 mm (about 149 tall).
+  - Modules facing inward: ESP32 beside needs 132 mm; ESP32 above fits at 122 mm.
+  - The user chose modules facing the door, lowest case.
+- **2D (`python work/coop_case_v7t_geometry.py`):** ALL OK at side 142 mm, H_INT 105, case 136 x 115 x 110 mm.
+  - 141 mm fails: carrier to modem 1.21 (need 2). 140 and 139 mm fail further.
+  - Tightest rows: bb_carrier/modem_bay 2.07 (need 2), esp32_dupont 0.63 (need 0.5), P4 counterbore inside the lid 1.75 (need 1.5), top_vent_ko 0.78 (need 0.5), modem_usb_plug clear of the corner steps 0.60 (need 0.3). The content-height rows for the ESP32 USB plug, the modem pocket and the modem lead are 0.0, by design.
+  - Placed by search: P4 at (-47.5, 11.5), and the ESP32 seat at u -50.33, where its jumper headers clear the back plate.
+- **Sheet:** `v7t_2d_layout.png` (2400 x 3155) rendered and reviewed panel by panel. The label lint found no overlapping text (199 labels), and no panel overflows.
+- **Not verified:** the revision 3 3D model and the door-removal sweep. Also unmeasured: the module, modem, breadboard and jumper sizes, which are assumed. Slicing, print, fit and heat are not checked.
+
+## Coop Case V7T triangular tube, layout revision 2: 18 November 2026 (2D software checks only)
+
+- **Evidence layer:** 2D fit check and a font-metric check of the sheet's text. The Blender file was not rebuilt (it is still revision 1, which the user asked to wait for approval). Not printed, not sliced, no renders, no STL.
+- **2D (`python work/coop_case_v7t_geometry.py`):** ALL OK at side 122 mm with the revision 2 contents. Those are the 96.8 x 58 x 12.8 modem pocket, the side USB plug and rising lead, the modem-lead run on the back plate, and the moved knock-out.
+  - **New lid-port rows for P4:** the hole is 1.71 over the free inside (need 0.5). The counterbore is 2.25 inside the lid (need 1.5), 6.04 from the tab notch (need 2) and 3.34 from the BL lid pin (need 1.5). The hole is 11.39 from the ESP32 USB plug (need 2).
+  - **Tightest margins:** MQ-135 pod to the shell 0.65. The modem pocket is 1.2 to the shell and 1.82 from the corner steps for removal. The modem plug and lead are 3.33 from the corner steps, and the modem lead is 0.0 at the content-height limit.
+  - **Smaller sides:** 121 and 120 mm fail on the MQ-135 pod to the shell (0.22, -0.21). The modem is no longer the limit.
+- **Sheet:** `v7t_2d_layout.png` (2400 x 3345) rendered and reviewed panel by panel. The label lint found no overlapping text (189 labels), and no panel overflows.
+- **Drawing fix:** revision 1's sheet used +X to the right in the front, plan and section views and +u to the right in the door views, which is mirror-image for the right-handed model. Revision 2 draws true views, checked against the user's Blender screenshots (sensor vents next to the back corner BL).
+- **Not verified:** the revision 2 3D model, slicing, print, fit, heat, the modem button and LED positions (taken from a product photo).
 
 ## Coop Case V7T triangular tube, 2D layout + Blender prototype: 18 November 2026 (software checks only)
 
